@@ -5,8 +5,8 @@ let activeSortBy  = 'popularity';
 let activeDays    = 7;
 let activeRegion  = 'global';
 let bookmarks = new Set(JSON.parse(localStorage.getItem('cj_bookmarks') || '[]'));
-// true = Editor's picks stay pinned at the top (default); false = interleaved by date
-let pinnedPicksEnabled = localStorage.getItem('cj_picks_pinned') !== 'false';
+// true = feed is filtered to show only Editor's picks; false = all articles interleaved by date
+let picksFilterActive = false;
 
 /* ===== Editor state ===== */
 let isEditorMode = false;
@@ -270,9 +270,10 @@ function renderFeed() {
     ? allArticles
     : allArticles.filter(a => a.category === activeFilter);
 
-  // When picks are unpinned, interleave Editor's picks by publishedAt so they
-  // aren't forced to the top — they still display with the "Editor's pick" badge.
-  if (!pinnedPicksEnabled && filtered.some(a => a.pinned)) {
+  // Filter to only Editor's picks when active; otherwise interleave picks by date.
+  if (picksFilterActive) {
+    filtered = filtered.filter(a => a.pinned);
+  } else if (filtered.some(a => a.pinned)) {
     filtered = [...filtered].sort((a, b) =>
       new Date(b.publishedAt) - new Date(a.publishedAt)
     );
@@ -727,18 +728,17 @@ function updateArticleCount() {
 
 /* ===== Editor's Picks toggle ===== */
 function applyPicksToggle() {
-  picksToggleBtn.classList.toggle('active', pinnedPicksEnabled);
-  picksToggleBtn.title = pinnedPicksEnabled
-    ? "Editor's picks pinned to top — click to unpin"
-    : "Editor's picks not pinned — click to pin to top";
+  picksToggleBtn.classList.toggle('active', picksFilterActive);
+  picksToggleBtn.title = picksFilterActive
+    ? "Showing Editor's Picks — click to show all"
+    : "Show Editor's Picks";
 }
 
 picksToggleBtn.addEventListener('click', () => {
-  pinnedPicksEnabled = !pinnedPicksEnabled;
-  localStorage.setItem('cj_picks_pinned', pinnedPicksEnabled);
+  picksFilterActive = !picksFilterActive;
   applyPicksToggle();
   renderFeed();
-  showToast(pinnedPicksEnabled ? "Editor's picks pinned to top" : "Editor's picks unpinned");
+  showToast(picksFilterActive ? "Showing Editor's Picks" : "Showing all articles");
 });
 
 applyPicksToggle(); // sync button state on load
