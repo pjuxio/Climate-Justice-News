@@ -162,7 +162,7 @@ app.use((req, res, next) => {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' https://www.googletagmanager.com",
+      "script-src 'self' https://www.googletagmanager.com 'sha256-GElfI/oqheGeYw+g3Ms5tafL8q8npSlt5mjW9zr7Aus='",
       "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
       "font-src 'self' https://fonts.gstatic.com",
       // Article images can originate from any publisher domain; Google S2 serves favicons
