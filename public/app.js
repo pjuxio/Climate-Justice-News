@@ -23,6 +23,7 @@ const refreshBtn  = document.getElementById('refresh-btn');
 const themeBtn    = document.getElementById('theme-btn');
 const retryBtn    = document.getElementById('retry-btn');
 const clearFilter = document.getElementById('clear-filter-btn');
+const articleCount= document.getElementById('article-count');
 const toast       = document.getElementById('toast');
 const filterChips = document.querySelectorAll('.filter-chip');
 const sortBtns    = document.querySelectorAll('[data-sort]');
@@ -284,12 +285,14 @@ function renderFeed() {
 
   if (filtered.length === 0) {
     emptyState.style.display = 'flex';
+    articleCount.textContent = '0 articles';
     return;
   }
 
   const frag = document.createDocumentFragment();
   filtered.forEach(a => frag.appendChild(createCard(a)));
   feed.appendChild(frag);
+  articleCount.textContent = `${filtered.length} article${filtered.length !== 1 ? 's' : ''}`;
 }
 
 /* ===== Subtitle helper ===== */
@@ -656,7 +659,7 @@ async function editorHide(article) {
     const card = feed.querySelector(`[data-url="${CSS.escape(article.url)}"]`);
     if (card) {
       card.classList.add('card--removing');
-      setTimeout(() => card.remove(), 300);
+      setTimeout(() => { card.remove(); updateArticleCount(); }, 300);
     }
     showToast('Article hidden from feed');
   } catch (err) {
@@ -716,6 +719,11 @@ async function editorUnpin(url) {
   } catch (err) {
     showToast(`Error: ${err.message}`);
   }
+}
+
+function updateArticleCount() {
+  const cards = feed.querySelectorAll('.card:not(.card--removing)');
+  articleCount.textContent = `${cards.length} article${cards.length !== 1 ? 's' : ''}`;
 }
 
 /* ===== Editor's Picks toggle ===== */
