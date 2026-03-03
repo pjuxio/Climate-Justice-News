@@ -182,6 +182,8 @@ Base query (always included):
 OR "climate racism" OR "just transition" OR "climate policy"
 OR "fossil fuels" OR "environmental law" OR "carbon tax"
 OR "COP29" OR "COP30" OR "COP31" OR "climate summit"
+OR "data center permitting" OR "data center approval"
+OR "data center controversy" OR "toxic pollution"
 ```
 
 Regional focus (ANDed when region ≠ global):

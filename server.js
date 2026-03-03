@@ -23,38 +23,49 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS curation (
       id   INT  PRIMARY KEY DEFAULT 1,
       hidden JSONB NOT NULL DEFAULT '[]',
-      pinned JSONB NOT NULL DEFAULT '[]'
+      pinned JSONB NOT NULL DEFAULT '[]',
+      manual JSONB NOT NULL DEFAULT '[]'
     )
+  `);
+  // Add manual column if it doesn't exist (migration for existing DBs)
+  await pool.query(`
+    ALTER TABLE curation ADD COLUMN IF NOT EXISTS manual JSONB NOT NULL DEFAULT '[]'
   `);
   await pool.query(`INSERT INTO curation (id) VALUES (1) ON CONFLICT DO NOTHING`);
 }
 
 async function loadCuration() {
-  const { rows } = await pool.query('SELECT hidden, pinned FROM curation WHERE id = 1');
+  const { rows } = await pool.query('SELECT hidden, pinned, manual FROM curation WHERE id = 1');
   return {
     hidden: Array.isArray(rows[0]?.hidden) ? rows[0].hidden : [],
     pinned: Array.isArray(rows[0]?.pinned) ? rows[0].pinned : [],
+    manual: Array.isArray(rows[0]?.manual) ? rows[0].manual : [],
   };
 }
 
 async function saveCuration(data) {
   await pool.query(
-    'UPDATE curation SET hidden = $1, pinned = $2 WHERE id = 1',
-    [JSON.stringify(data.hidden), JSON.stringify(data.pinned)]
+    'UPDATE curation SET hidden = $1, pinned = $2, manual = $3 WHERE id = 1',
+    [JSON.stringify(data.hidden), JSON.stringify(data.pinned), JSON.stringify(data.manual)]
   );
 }
 
-let curation = { hidden: [], pinned: [] }; // populated in start()
+let curation = { hidden: [], pinned: [], manual: [] }; // populated in start()
 
-// Apply hidden + pinned curation to a raw article list.
-// Hidden articles are removed; pinned articles are moved to the front.
+// Apply hidden + pinned + manual curation to a raw article list.
+// Hidden articles are removed; pinned articles appear at the front;
+// manual articles are merged into the feed sorted by date.
 // Called at serve-time so curation changes take effect without bypassing cache.
 function applyCuration(articles) {
   const hiddenSet = new Set(curation.hidden);
   const pinnedUrls = new Set(curation.pinned.map(p => p.url));
-  const live = articles.filter(a => !hiddenSet.has(a.url) && !pinnedUrls.has(a.url));
+  const manualUrls = new Set(curation.manual.map(m => m.url));
+  const live = articles.filter(a => !hiddenSet.has(a.url) && !pinnedUrls.has(a.url) && !manualUrls.has(a.url));
   const pinned = curation.pinned.map((p, i) => ({ ...p, id: `pinned-${i}`, pinned: true }));
-  return [...pinned, ...live];
+  const manual = curation.manual.map((m, i) => ({ ...m, id: `manual-${i}`, manual: true }));
+  // Merge manual articles with live articles, sorted by publishedAt
+  const merged = [...live, ...manual].sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+  return [...pinned, ...merged];
 }
 
 // Per-param cache: key = `${sortBy}_${days}_${region}`
@@ -73,7 +84,7 @@ setInterval(() => {
 const BASE_QUERY =
   '"climate justice" OR "environmental justice" OR "climate equity" OR "climate racism" OR "just transition" ' +
   'OR "climate policy" OR "fossil fuels" OR "environmental law" OR "carbon tax" OR "COP29" OR "COP30" OR "COP31" OR "climate summit" ' +
-  'OR "data center permitting" OR "data center approval" OR "data center controversy"';
+  'OR "data center permitting" OR "data center approval" OR "data center controversy" OR "toxic pollution"';
 
 // Geographic focus terms appended with AND to narrow results by region.
 // null = no regional restriction (global).
@@ -235,7 +246,7 @@ app.get('/api/curation/verify', editorAuth, (req, res) => {
 // Public: read current curation state (frontend loads this to show badges/counts)
 app.get('/api/curation', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ hidden: curation.hidden, pinned: curation.pinned });
+  res.json({ hidden: curation.hidden, pinned: curation.pinned, manual: curation.manual });
 });
 
 // Hide an article by URL — removes it from the public feed
@@ -293,6 +304,38 @@ app.delete('/api/curation/pin', editorAuth, async (req, res) => {
   if (!url) return res.status(400).json({ error: 'URL required' });
   auditLog(req, 'unpin', url);
   curation.pinned = curation.pinned.filter(p => p.url !== url);
+  await saveCuration(curation);
+  res.json({ ok: true });
+});
+
+// Add a manual article — appears in feed sorted by date (not pinned)
+app.post('/api/curation/manual', editorAuth, async (req, res) => {
+  const { url, title, source, author, description, image, publishedAt, readTime, category } = req.body;
+  if (!url || !isSafeUrl(url)) return res.status(400).json({ error: 'Invalid URL' });
+  if (!curation.manual.find(m => m.url === url)) {
+    curation.manual.push({
+      url,
+      title: String(title || '').slice(0, 500),
+      source: String(source || '').slice(0, 200),
+      author: author ? String(author).slice(0, 200) : null,
+      description: String(description || '').slice(0, 2000),
+      image: image && isSafeUrl(image) ? image : null,
+      publishedAt: publishedAt || new Date().toISOString(),
+      readTime: Math.min(Math.max(Number(readTime) || 1, 1), 60),
+      category: ['Policy', 'Community', 'Science', 'Environment', 'General'].includes(category)
+        ? category : 'General',
+      addedAt: new Date().toISOString(),
+    });
+    await saveCuration(curation);
+  }
+  res.json({ ok: true });
+});
+
+// Remove a manual article
+app.delete('/api/curation/manual', editorAuth, async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL required' });
+  curation.manual = curation.manual.filter(m => m.url !== url);
   await saveCuration(curation);
   res.json({ ok: true });
 });
