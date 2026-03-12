@@ -20,7 +20,7 @@ Data flow: Frontend → `/api/news` → NewsAPI (cached 5min) → `applyCuration
 ### Curation System
 Editor mode (Ctrl+Shift+E) allows pinning/hiding articles:
 ```js
-// Pinned articles appear at feed top with "Editor's pick" badge
+// Pinned articles appear at feed top with "Curated" badge
 curation.pinned = [{ url, title, source, note, ... }]
 // Hidden articles are filtered out server-side
 curation.hidden = ["https://example.com/article"]

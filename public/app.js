@@ -5,7 +5,7 @@ let activeSortBy  = 'popularity';
 let activeDays    = 7;
 let activeRegion  = 'global';
 let bookmarks = new Set(JSON.parse(localStorage.getItem('cj_bookmarks') || '[]'));
-// true = feed is filtered to show only Editor's picks; false = all articles interleaved by date
+// true = feed is filtered to show only Highlights; false = all articles interleaved by date
 let picksFilterActive = false;
 
 /* ===== Editor state ===== */
@@ -126,7 +126,7 @@ function createCard(article) {
 
   a.innerHTML = `
     <div class="card-body">
-      ${isPinned ? `<div class="pinned-bar"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3a1 1 0 0 1 .7 1.7l-1.4 1.4 1 3.6a1 1 0 0 1-.3 1l-3 2.6V17a1 1 0 0 1-.3.7l-2 2a1 1 0 0 1-1.5-1.3l.1-.1 1.7-1.7v-4.3a1 1 0 0 1 .3-.7l3-2.6-.9-3.3 1.5-1.5A1 1 0 0 1 16 3zm-5.7 11.6L4 21.3a1 1 0 0 0 1.3 1.5l.1-.1 6.3-6.3-1.4-.8z"/></svg> Editor's pick${article.note ? ` · <span class="pinned-note">${escHtml(article.note)}</span>` : ''}</div>` : ''}
+      ${isPinned ? `<div class="pinned-bar"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3a1 1 0 0 1 .7 1.7l-1.4 1.4 1 3.6a1 1 0 0 1-.3 1l-3 2.6V17a1 1 0 0 1-.3.7l-2 2a1 1 0 0 1-1.5-1.3l.1-.1 1.7-1.7v-4.3a1 1 0 0 1 .3-.7l3-2.6-.9-3.3 1.5-1.5A1 1 0 0 1 16 3zm-5.7 11.6L4 21.3a1 1 0 0 0 1.3 1.5l.1-.1 6.3-6.3-1.4-.8z"/></svg> Curated${article.note ? ` · <span class="pinned-note">${escHtml(article.note)}</span>` : ''}</div>` : ''}
       <div class="card-meta">
         <div class="source-avatar">
           ${faviconUrl
@@ -270,7 +270,7 @@ function renderFeed() {
     ? allArticles
     : allArticles.filter(a => a.category === activeFilter);
 
-  // Filter to only Editor's picks when active; otherwise interleave picks by date.
+  // Filter to only Highlights when active; otherwise interleave picks by date.
   if (picksFilterActive) {
     filtered = filtered.filter(a => a.pinned);
   } else if (filtered.some(a => a.pinned)) {
@@ -726,19 +726,19 @@ function updateArticleCount() {
   articleCount.textContent = `${cards.length} article${cards.length !== 1 ? 's' : ''}`;
 }
 
-/* ===== Editor's Picks toggle ===== */
+/* ===== Highlights toggle ===== */
 function applyPicksToggle() {
   picksToggleBtn.classList.toggle('active', picksFilterActive);
   picksToggleBtn.title = picksFilterActive
-    ? "Showing Editor's Picks — click to show all"
-    : "Show Editor's Picks";
+    ? "Showing Highlights — click to show all"
+    : "Show Highlights";
 }
 
 picksToggleBtn.addEventListener('click', () => {
   picksFilterActive = !picksFilterActive;
   applyPicksToggle();
   renderFeed();
-  showToast(picksFilterActive ? "Showing Editor's Picks" : "Showing all articles");
+  showToast(picksFilterActive ? "Showing Highlights" : "Showing all articles");
 });
 
 applyPicksToggle(); // sync button state on load

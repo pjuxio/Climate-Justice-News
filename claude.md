@@ -69,7 +69,7 @@ let activeSortBy = 'popularity'; // Sort: popularity|publishedAt
 let activeDays = 7;             // Range: 1|3|7|30
 let activeRegion = 'global';    // Region: global|americas|africa|asia|europe|mena
 let bookmarks = new Set();      // Client-side saved articles (localStorage)
-let picksFilterActive = false;  // Show only Editor's picks
+let picksFilterActive = false;  // Show only Highlights
 
 // Editor mode
 let isEditorMode = false;
@@ -134,7 +134,7 @@ app.get('/api/new-endpoint', async (req, res) => {
 
 Editor mode is activated with `Ctrl+Shift+E`:
 
-- **Pinned articles**: Stored with full article data, appear at feed top with "Editor's pick" badge
+- **Pinned articles**: Stored with full article data, appear at feed top with "Curated" badge
 - **Hidden articles**: Just URLs, filtered out server-side
 - Changes persist immediately to PostgreSQL via `saveCuration()`
 
