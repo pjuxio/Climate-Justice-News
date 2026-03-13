@@ -98,7 +98,7 @@ const REGION_TERMS = {
 };
 
 // Domains blocked from appearing in the feed.
-const BLOCKED_DOMAINS = ['freerepublic.com', 'wattsupwiththat.com', 'dailysignal.com'];
+const BLOCKED_DOMAINS = ['freerepublic.com', 'wattsupwiththat.com', 'dailysignal.com', 'globenewswire.com'];
 
 // NewsAPI supports multiple comma-separated languages.
 // For all regions we stay in English; going broader (es, fr, pt, ar) would
