@@ -15,7 +15,15 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test:website": "node scripts/website-test-agent.mjs"
+  },
+  "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "latest",
+    "@axe-core/playwright": "^4.10.0",
+    "chrome-launcher": "^1.1.2",
+    "lighthouse": "^12.0.0",
+    "playwright": "^1.49.0"
   },
   "dependencies": {
     "compression": "^1.8.1",
