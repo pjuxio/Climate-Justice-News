@@ -2,10 +2,21 @@ require('dotenv').config();
 const crypto = require('crypto');
 const express = require('express');
 const fetch = require('node-fetch');
+const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
+const { execSync } = require('child_process');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
+
+// Cache-busting version string — use git commit hash if available, else timestamp
+let ASSET_VERSION;
+try {
+  ASSET_VERSION = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+    .toString().trim();
+} catch {
+  ASSET_VERSION = Date.now().toString(36);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -207,10 +218,22 @@ function editorAuth(req, res, next) {
   next();
 }
 
-// index.html must not be cached so users always receive the latest deploy
+// index.html must not be cached so users always receive the latest deploy.
+// Inject ?v= query string on app.js and style.css to bust browser caches on deploy.
+const INDEX_HTML_PATH = path.join(__dirname, 'public', 'index.html');
+let _indexHtmlCache = null;
+function getIndexHtml() {
+  if (!_indexHtmlCache) {
+    _indexHtmlCache = fs.readFileSync(INDEX_HTML_PATH, 'utf8')
+      .replace('href="style.css"', `href="style.css?v=${ASSET_VERSION}"`)
+      .replace('src="app.js"', `src="app.js?v=${ASSET_VERSION}"`);
+  }
+  return _indexHtmlCache;
+}
 app.get('/', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(getIndexHtml());
 });
 
 // Serve other static assets (JS, CSS, images) with a 24-hour cache
