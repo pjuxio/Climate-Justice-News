@@ -8,6 +8,9 @@ const { Pool } = require('pg');
 const { execSync } = require('child_process');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
+const sgMail = require('@sendgrid/mail');
+
+if (process.env.SENDGRID_API_KEY) sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Cache-busting version string — use git commit hash if available, else timestamp
 let ASSET_VERSION;
@@ -43,6 +46,19 @@ async function initDb() {
     ALTER TABLE curation ADD COLUMN IF NOT EXISTS manual JSONB NOT NULL DEFAULT '[]'
   `);
   await pool.query(`INSERT INTO curation (id) VALUES (1) ON CONFLICT DO NOTHING`);
+
+  // Submissions table for public story suggestions
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS submissions (
+      id              SERIAL PRIMARY KEY,
+      url             TEXT NOT NULL,
+      submitter_name  TEXT,
+      submitter_email TEXT,
+      note            TEXT,
+      submitted_at    TIMESTAMPTZ DEFAULT NOW(),
+      status          TEXT DEFAULT 'pending'
+    )
+  `);
 }
 
 async function loadCuration() {
@@ -115,6 +131,67 @@ function isSafeUrl(url) {
     const { protocol } = new URL(url);
     return protocol === 'https:' || protocol === 'http:';
   } catch { return false; }
+}
+
+// Fetch Open Graph / meta tags from an article URL to populate metadata fields.
+async function fetchArticleMetadata(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ClimateJusticeBot/1.0)', 'Accept': 'text/html' },
+    });
+    clearTimeout(timer);
+    const html = (await res.text()).slice(0, 200_000);
+    const getMeta = (prop) => {
+      const re1 = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"'<>]+)["']`, 'i');
+      const re2 = new RegExp(`<meta[^>]+content=["']([^"'<>]+)["'][^>]+(?:property|name)=["']${prop}["']`, 'i');
+      return (html.match(re1) || html.match(re2))?.[1]?.trim() || null;
+    };
+    const title = (getMeta('og:title') || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || '').trim();
+    const description = (getMeta('og:description') || getMeta('description') || '').trim();
+    const image = getMeta('og:image');
+    const siteName = getMeta('og:site_name') || new URL(url).hostname.replace(/^www\./, '');
+    const rawDate = getMeta('article:published_time') || getMeta('datePublished');
+    return {
+      title: title.slice(0, 500),
+      description: description.slice(0, 2000),
+      image: image && isSafeUrl(image) ? image : null,
+      source: siteName.slice(0, 200),
+      author: null,
+      publishedAt: rawDate && !isNaN(Date.parse(rawDate))
+        ? new Date(rawDate).toISOString() : new Date().toISOString(),
+      readTime: Math.max(1, Math.ceil(description.split(/\s+/).filter(Boolean).length / 200)),
+    };
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+}
+
+// Send a SendGrid notification email when a new submission arrives.
+async function sendSubmissionNotification(sub) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.NOTIFICATION_EMAIL) return;
+  const from = process.env.SENDGRID_FROM_EMAIL || process.env.NOTIFICATION_EMAIL;
+  try {
+    await sgMail.send({
+      to: process.env.NOTIFICATION_EMAIL,
+      from,
+      subject: `New story submission on ClimateJustice.news`,
+      html: `
+        <h2 style="font-family:sans-serif">New story submission</h2>
+        <p style="font-family:sans-serif"><strong>URL:</strong> <a href="${sub.url}">${sub.url}</a></p>
+        ${sub.submitter_name  ? `<p style="font-family:sans-serif"><strong>Name:</strong> ${sub.submitter_name}</p>` : ''}
+        ${sub.submitter_email ? `<p style="font-family:sans-serif"><strong>Email:</strong> ${sub.submitter_email}</p>` : ''}
+        ${sub.note            ? `<p style="font-family:sans-serif"><strong>Note:</strong> ${sub.note}</p>` : ''}
+        <p style="font-family:sans-serif;color:#888">Submitted ${new Date(sub.submitted_at).toUTCString()}</p>
+        <p style="font-family:sans-serif"><a href="https://climatejustice.news">Review in editor mode →</a></p>
+      `,
+    });
+  } catch (err) {
+    console.error('SendGrid error:', err.message);
+  }
 }
 
 function buildQuery(region) {
@@ -200,6 +277,15 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests. Please wait before refreshing again.' },
 });
 app.use('/api/', apiLimiter);
+
+// Stricter limiter for public story submissions: 5 per hour per IP
+const submitLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many submissions. Please try again later.' },
+});
 
 // Editor auth: validates X-Editor-Token header against EDITOR_TOKEN env var.
 // Uses crypto.timingSafeEqual to prevent timing-based token enumeration attacks.
@@ -303,10 +389,20 @@ app.delete('/api/curation/pin', editorAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// Add a manual article — appears in feed sorted by date (not pinned)
+// Add a manual article — appears in feed sorted by date (not pinned).
+// If only a URL is supplied (no title), the server fetches Open Graph metadata automatically.
 app.post('/api/curation/manual', editorAuth, async (req, res) => {
-  const { url, title, source, author, description, image, publishedAt, readTime, category, region } = req.body;
+  let { url, title, source, author, description, image, publishedAt, readTime, category, region } = req.body;
   if (!url || !isSafeUrl(url)) return res.status(400).json({ error: 'Invalid URL' });
+
+  // Auto-fetch metadata when the editor adds just a URL
+  if (!title) {
+    const meta = await fetchArticleMetadata(url);
+    if (!meta) return res.status(502).json({ error: 'Could not fetch article metadata. Please check the URL and try again.' });
+    ({ title, source, author, description, image, publishedAt, readTime } = meta);
+    category = categorize({ title, description });
+  }
+
   if (!curation.manual.find(m => m.url === url)) {
     curation.manual.push({
       url,
@@ -324,6 +420,71 @@ app.post('/api/curation/manual', editorAuth, async (req, res) => {
     });
     await saveCuration(curation);
   }
+  res.json({ ok: true });
+});
+
+// ─── Public story submissions ──────────────────────────────────────────────────
+
+app.post('/api/submit', submitLimiter, async (req, res) => {
+  const { url, submitter_name, submitter_email, note } = req.body;
+  if (!url || !isSafeUrl(url)) return res.status(400).json({ error: 'A valid URL is required.' });
+
+  const { rows } = await pool.query(
+    `INSERT INTO submissions (url, submitter_name, submitter_email, note)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [
+      url.slice(0, 2000),
+      submitter_name ? String(submitter_name).slice(0, 200) : null,
+      submitter_email ? String(submitter_email).slice(0, 200) : null,
+      note ? String(note).slice(0, 1000) : null,
+    ]
+  );
+
+  sendSubmissionNotification(rows[0]).catch(() => {});
+  res.json({ ok: true });
+});
+
+// Returns all pending submissions for editor review
+app.get('/api/editor/submissions', editorAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT * FROM submissions WHERE status = 'pending' ORDER BY submitted_at DESC`
+  );
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ submissions: rows });
+});
+
+// Approve: fetch metadata, add to manual feed, mark approved
+app.post('/api/editor/submissions/:id/approve', editorAuth, async (req, res) => {
+  const { rows } = await pool.query(`SELECT * FROM submissions WHERE id = $1`, [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'Submission not found' });
+  const sub = rows[0];
+
+  const meta = await fetchArticleMetadata(sub.url);
+  if (!meta) return res.status(502).json({ error: 'Could not fetch article metadata.' });
+
+  if (!curation.manual.find(m => m.url === sub.url)) {
+    curation.manual.push({
+      url: sub.url,
+      title: meta.title,
+      source: meta.source,
+      author: meta.author,
+      description: meta.description,
+      image: meta.image,
+      publishedAt: meta.publishedAt,
+      readTime: meta.readTime,
+      category: categorize({ title: meta.title, description: meta.description }),
+      region: 'global',
+      addedAt: new Date().toISOString(),
+    });
+    await saveCuration(curation);
+  }
+  await pool.query(`UPDATE submissions SET status = 'approved' WHERE id = $1`, [sub.id]);
+  res.json({ ok: true });
+});
+
+// Reject: mark rejected
+app.post('/api/editor/submissions/:id/reject', editorAuth, async (req, res) => {
+  await pool.query(`UPDATE submissions SET status = 'rejected' WHERE id = $1`, [req.params.id]);
   res.json({ ok: true });
 });
 

@@ -75,10 +75,23 @@ const editorPinNote         = document.getElementById('editor-pin-note');
 const editorPinSubmit       = document.getElementById('editor-pin-submit');
 const editorPinError        = document.getElementById('editor-pin-error');
 
+/* Submit modal DOM refs */
+const submitOverlay    = document.getElementById('submit-overlay');
+const submitClose      = document.getElementById('submit-close');
+const submitUrlInput   = document.getElementById('submit-url-input');
+const submitNameInput  = document.getElementById('submit-name-input');
+const submitEmailInput = document.getElementById('submit-email-input');
+const submitNoteInput  = document.getElementById('submit-note-input');
+const submitStoryBtn   = document.getElementById('submit-story-btn');
+const submitError      = document.getElementById('submit-error');
+const submitSuccess    = document.getElementById('submit-success');
+const submitFormFields = document.getElementById('submit-form-fields');
+const submitFooterBtn  = document.getElementById('submit-story-footer-btn');
+
 /* ===== Body scroll management ===== */
 function updateBodyScroll() {
   const anyOpen = [modalOverlay, editorLoginOverlay, editorManageOverlay,
-                   editorBrowseOverlay, editorPinOverlay]
+                   editorBrowseOverlay, editorPinOverlay, submitOverlay]
     .some(el => el && el.style.display !== 'none');
   document.body.style.overflow = anyOpen ? 'hidden' : '';
 }
@@ -558,10 +571,10 @@ editorBrowseBtn.addEventListener('click', openBrowse);
 editorManageBtn.addEventListener('click', openEditorManage);
 
 /* ── Editor manage modal ── */
-function openEditorManage() {
-  renderEditorManage();
+async function openEditorManage() {
   editorManageOverlay.style.display = 'flex';
   updateBodyScroll();
+  await renderEditorManage();
 }
 
 function closeEditorManage() {
@@ -572,11 +585,38 @@ function closeEditorManage() {
 editorManageClose.addEventListener('click', closeEditorManage);
 editorManageOverlay.addEventListener('click', e => { if (e.target === editorManageOverlay) closeEditorManage(); });
 
-function renderEditorManage() {
+async function renderEditorManage() {
+  const lists = document.getElementById('editor-manage-lists');
+  lists.innerHTML = '<p style="font-size:0.875rem;color:var(--text-muted);padding:4px 0">Loading…</p>';
+
   const pinned = curationData.pinned || [];
   const manual = curationData.manual || [];
+  let submissions = [];
+  try {
+    const data = await curationRequest('GET', '/api/editor/submissions');
+    submissions = data.submissions || [];
+  } catch { /* non-fatal — show feed lists even if submissions fail */ }
 
-  editorManageBody.innerHTML = `
+  lists.innerHTML = `
+    ${submissions.length > 0 ? `
+    <section class="info-section">
+      <h3 class="info-heading">Submissions (${submissions.length} pending)</h3>
+      ${submissions.map(s => `
+        <div class="manage-row" data-id="${s.id}">
+          <div class="manage-row-info">
+            <div class="manage-row-title">${escHtml(s.url.replace(/^https?:\/\//, '').slice(0, 80))}</div>
+            <div class="manage-row-meta">
+              ${s.submitter_name ? escHtml(s.submitter_name) : 'Anonymous'}
+              ${s.submitter_email ? ` · ${escHtml(s.submitter_email)}` : ''}
+              ${s.note ? ` · <em>${escHtml(s.note.slice(0, 60))}${s.note.length > 60 ? '…' : ''}</em>` : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="editor-btn editor-pin-btn submission-approve-btn" data-id="${s.id}">Approve</button>
+            <button class="editor-btn editor-remove-btn submission-reject-btn" data-id="${s.id}">Reject</button>
+          </div>
+        </div>`).join('')}
+    </section>` : ''}
     <section class="info-section">
       <h3 class="info-heading">Pinned (${pinned.length})</h3>
       ${pinned.length === 0
@@ -604,11 +644,17 @@ function renderEditorManage() {
           </div>`).join('')}
     </section>`;
 
-  editorManageBody.querySelectorAll('.manage-unpin-btn').forEach(btn => {
+  lists.querySelectorAll('.manage-unpin-btn').forEach(btn => {
     btn.addEventListener('click', () => editorUnpin(btn.dataset.url));
   });
-  editorManageBody.querySelectorAll('.manage-remove-btn').forEach(btn => {
+  lists.querySelectorAll('.manage-remove-btn').forEach(btn => {
     btn.addEventListener('click', () => editorRemoveManual(btn.dataset.url));
+  });
+  lists.querySelectorAll('.submission-approve-btn').forEach(btn => {
+    btn.addEventListener('click', () => editorApproveSubmission(Number(btn.dataset.id), btn));
+  });
+  lists.querySelectorAll('.submission-reject-btn').forEach(btn => {
+    btn.addEventListener('click', () => editorRejectSubmission(Number(btn.dataset.id)));
   });
 }
 
@@ -659,6 +705,131 @@ async function editorRemoveManual(url) {
     showToast(`Error: ${err.message}`);
   }
 }
+
+async function editorAddUrl() {
+  const input = document.getElementById('editor-add-url-input');
+  const regionSelect = document.getElementById('editor-add-url-region');
+  const errorEl = document.getElementById('editor-add-url-error');
+  const btn = document.getElementById('editor-add-url-btn');
+  const url = input.value.trim();
+
+  errorEl.style.display = 'none';
+  if (!url) { errorEl.textContent = 'Please enter a URL.'; errorEl.style.display = 'block'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+  try {
+    await curationRequest('POST', '/api/curation/manual', { url, region: regionSelect.value });
+    const data = await fetch('/api/curation').then(r => r.json());
+    curationData.manual = data.manual || [];
+    updateEditorCounts();
+    await fetchNews();
+    input.value = '';
+    regionSelect.value = 'global';
+    renderEditorManage();
+    showToast('Article added to feed');
+  } catch (err) {
+    errorEl.textContent = err.message || 'Failed to add article.';
+    errorEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Add to feed';
+  }
+}
+
+async function editorApproveSubmission(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+  try {
+    await curationRequest('POST', `/api/editor/submissions/${id}/approve`);
+    const data = await fetch('/api/curation').then(r => r.json());
+    curationData.manual = data.manual || [];
+    updateEditorCounts();
+    await fetchNews();
+    renderEditorManage();
+    showToast('Article added to feed');
+  } catch (err) {
+    showToast(`Error: ${err.message}`);
+    renderEditorManage();
+  }
+}
+
+async function editorRejectSubmission(id) {
+  try {
+    await curationRequest('POST', `/api/editor/submissions/${id}/reject`);
+    renderEditorManage();
+    showToast('Submission rejected');
+  } catch (err) {
+    showToast(`Error: ${err.message}`);
+  }
+}
+
+/* ── Add URL button handler ── */
+document.getElementById('editor-add-url-btn').addEventListener('click', editorAddUrl);
+document.getElementById('editor-add-url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') editorAddUrl();
+});
+
+/* ── Submit a story modal ── */
+function openSubmitModal() {
+  submitOverlay.style.display = 'flex';
+  submitError.style.display = 'none';
+  submitSuccess.style.display = 'none';
+  submitFormFields.style.display = 'flex';
+  updateBodyScroll();
+  setTimeout(() => submitUrlInput.focus(), 60);
+}
+
+function closeSubmitModal() {
+  submitOverlay.style.display = 'none';
+  submitUrlInput.value = '';
+  submitNameInput.value = '';
+  submitEmailInput.value = '';
+  submitNoteInput.value = '';
+  submitError.style.display = 'none';
+  submitSuccess.style.display = 'none';
+  submitFormFields.style.display = 'flex';
+  updateBodyScroll();
+}
+
+async function submitStory() {
+  const url = submitUrlInput.value.trim();
+  submitError.style.display = 'none';
+  if (!url) {
+    submitError.textContent = 'Please enter a URL.';
+    submitError.style.display = 'block';
+    return;
+  }
+
+  submitStoryBtn.disabled = true;
+  submitStoryBtn.textContent = 'Submitting…';
+  try {
+    const res = await fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        submitter_name: submitNameInput.value.trim() || null,
+        submitter_email: submitEmailInput.value.trim() || null,
+        note: submitNoteInput.value.trim() || null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Submission failed');
+    submitFormFields.style.display = 'none';
+    submitSuccess.style.display = 'block';
+  } catch (err) {
+    submitError.textContent = err.message;
+    submitError.style.display = 'block';
+    submitStoryBtn.disabled = false;
+    submitStoryBtn.textContent = 'Submit story';
+  }
+}
+
+submitFooterBtn.addEventListener('click', openSubmitModal);
+submitClose.addEventListener('click', closeSubmitModal);
+submitOverlay.addEventListener('click', e => { if (e.target === submitOverlay) closeSubmitModal(); });
+submitStoryBtn.addEventListener('click', submitStory);
+submitUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') submitStory(); });
 
 
 /* ===== Browse overlay ===== */

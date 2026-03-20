@@ -162,6 +162,8 @@
   <footer class="footer">
     <a href="https://github.com/pjuxio/Climate-Justice-Feed" target="_blank" rel="noopener">GitHub</a>
     <span class="footer-sep">·</span>
+    <button id="submit-story-footer-btn" class="footer-link-btn">Submit a story</button>
+    <span class="footer-sep">·</span>
     <a href="https://buymeacoffee.com/pjux" target="_blank" rel="noopener" class="bmc-link">☕ Buy me a coffee</a>
   </footer>
 
@@ -229,7 +231,7 @@
     </div>
   </div>
 
-  <!-- Editor manage modal — shows pinned & hidden articles -->
+  <!-- Editor manage modal — shows pinned & manual articles, submissions, add-URL form -->
   <div class="modal-overlay" id="editor-manage-overlay" role="dialog" aria-modal="true" aria-labelledby="editor-manage-title" style="display:none">
     <div class="modal">
       <div class="modal-header">
@@ -242,7 +244,27 @@
         </button>
       </div>
       <div class="modal-body" id="editor-manage-body" style="gap:20px">
-        <!-- Populated by JS -->
+        <!-- Add URL section (static) -->
+        <section class="info-section">
+          <h3 class="info-heading">Add URL to Feed</h3>
+          <div class="add-url-form">
+            <input type="url" id="editor-add-url-input" class="editor-token-input" placeholder="https://example.com/article" autocomplete="off" />
+            <div class="add-url-controls">
+              <select id="editor-add-url-region" class="editor-select editor-select--sm">
+                <option value="global">Global</option>
+                <option value="americas">Americas</option>
+                <option value="africa">Africa</option>
+                <option value="asia">Asia Pacific</option>
+                <option value="europe">Europe</option>
+                <option value="mena">MENA</option>
+              </select>
+              <button id="editor-add-url-btn" class="editor-btn editor-pin-btn">Add to feed</button>
+            </div>
+            <p id="editor-add-url-error" style="display:none;font-size:0.8rem;color:#ef4444;margin:0"></p>
+          </div>
+        </section>
+        <!-- Dynamic: submissions + pinned + in-feed lists -->
+        <div id="editor-manage-lists"></div>
       </div>
     </div>
   </div>
@@ -321,6 +343,48 @@
         </div>
         <p id="editor-pin-error" style="display:none;font-size:0.8rem;color:#ef4444;margin:0"></p>
         <button id="editor-pin-submit" class="retry-btn" style="align-self:flex-start">Pin Article</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submit a story modal -->
+  <div class="modal-overlay" id="submit-overlay" role="dialog" aria-modal="true" aria-labelledby="submit-modal-title" style="display:none">
+    <div class="modal editor-login-modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="submit-modal-title">Submit a Story</h2>
+        <button class="modal-close" id="submit-close" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" style="gap:14px">
+        <p style="font-size:0.875rem;color:var(--text-muted);margin:0">Know a story that belongs here? Share the link and we'll review it.</p>
+        <div id="submit-form-fields" style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:0.76rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Story URL <span style="font-weight:400;text-transform:none;color:#ef4444">*</span></label>
+            <input type="url" id="submit-url-input" class="editor-token-input" placeholder="https://example.com/article" autocomplete="off" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:0.76rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Your name <span style="font-weight:400;text-transform:none">(optional)</span></label>
+            <input type="text" id="submit-name-input" class="editor-token-input" placeholder="Jane Smith" autocomplete="name" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:0.76rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Your email <span style="font-weight:400;text-transform:none">(optional)</span></label>
+            <input type="email" id="submit-email-input" class="editor-token-input" placeholder="jane@example.com" autocomplete="email" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:0.76rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Why this story? <span style="font-weight:400;text-transform:none">(optional)</span></label>
+            <textarea id="submit-note-input" class="editor-token-input submit-textarea" placeholder="What makes this relevant to climate justice?" rows="3"></textarea>
+          </div>
+          <p id="submit-error" style="display:none;font-size:0.8rem;color:#ef4444;margin:0"></p>
+          <button id="submit-story-btn" class="retry-btn" style="align-self:flex-start">Submit story</button>
+        </div>
+        <div id="submit-success" style="display:none;text-align:center;padding:16px 0">
+          <p style="font-size:1.05rem;font-weight:600;color:var(--text-primary);margin:0 0 8px">Thanks for the tip!</p>
+          <p style="font-size:0.875rem;color:var(--text-muted);margin:0">We'll review your submission and add it to the feed if it's a good fit.</p>
+        </div>
       </div>
     </div>
   </div>
