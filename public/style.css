@@ -1000,7 +1000,7 @@ kbd {
 }
 
 /* ===== Browse overlay ===== */
-.modal--wide { max-width: 720px; }
+.modal--wide { max-width: 960px; }
 
 .browse-controls {
   padding: 10px 22px;
@@ -1014,44 +1014,17 @@ kbd {
 }
 .browse-controls::-webkit-scrollbar { display: none; }
 
-.discovery-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 12px 22px;
-  border-bottom: 1px solid var(--border);
-}
-.discovery-card:last-child { border-bottom: none; }
-
-.discovery-card-info { flex: 1; min-width: 0; }
-
-.discovery-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  flex-wrap: wrap;
+#editor-browse-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 16px;
+  align-items: start;
 }
 
-.discovery-source {
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--text-primary);
+.browse-card {
+  cursor: default;
 }
-
-.discovery-time {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-}
-
-.discovery-card-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--text-primary);
-}
-
-.discovery-card-actions { flex-shrink: 0; padding-top: 2px; }
 
 .discovery-pinned-badge {
   font-size: 0.72rem;

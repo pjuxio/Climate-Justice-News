@@ -756,31 +756,44 @@ function renderBrowse() {
   browseArticles.forEach(article => {
     const isPinned = pinnedUrls.has(article.url);
     const isManual = manualUrls.has(article.url);
+    const faviconUrl = getFaviconUrl(article.url);
 
-    const row = document.createElement('div');
-    row.className = 'discovery-card';
-    row.innerHTML = `
-      <div class="discovery-card-info">
-        <div class="discovery-card-meta">
-          <span class="discovery-source">${escHtml(article.source)}</span>
-          <span class="discovery-time">${timeAgo(article.publishedAt)}</span>
+    const card = document.createElement('div');
+    card.className = 'card browse-card';
+    card.innerHTML = `
+      <div class="card-body">
+        <div class="card-meta">
+          <div class="source-avatar">
+            ${faviconUrl ? `<img src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
+            <span>${initials(article.source)}</span>
+          </div>
+          <div class="source-info">
+            <div class="source-name">${escHtml(article.source)}</div>
+            <div class="source-time">${timeAgo(article.publishedAt)}</div>
+          </div>
           <span class="category-badge">${escHtml(article.category)}</span>
         </div>
-        <div class="discovery-card-title">${escHtml(article.title)}</div>
+        <h2 class="card-title">${escHtml(article.title)}</h2>
       </div>
-      <div class="discovery-card-actions">
+      ${article.image ? `<img class="card-image" src="${escHtml(article.image)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+      ${article.description ? `<p class="card-desc">${escHtml(article.description)}</p>` : ''}
+      <div class="card-footer">
+        <span class="read-time">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          ${article.readTime} min read
+        </span>
         ${isPinned
           ? '<span class="discovery-pinned-badge">✓ Pinned</span>'
           : isManual
             ? '<span class="discovery-pinned-badge">✓ In Feed</span>'
-            : '<button class="editor-btn editor-pin-btn discovery-pin-btn">Pin</button>'}
+            : '<button class="editor-btn editor-pin-btn browse-pin-btn">+ Pin to feed</button>'}
       </div>`;
 
     if (!isPinned && !isManual) {
-      row.querySelector('.discovery-pin-btn').addEventListener('click', () => showPinModal(article));
+      card.querySelector('.browse-pin-btn').addEventListener('click', () => showPinModal(article));
     }
 
-    frag.appendChild(row);
+    frag.appendChild(card);
   });
 
   editorBrowseBody.appendChild(frag);
