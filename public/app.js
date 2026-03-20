@@ -3,6 +3,10 @@ let allArticles = [];
 let activeFilter = 'All';
 let activeDays   = 0;        // 0 = All time
 let activeRegion = 'global';
+
+const PAGE_SIZE = 15;
+let _filteredArticles = [];
+let _renderedCount    = 0;
 let bookmarks = new Set(JSON.parse(localStorage.getItem('cj_bookmarks') || '[]'));
 
 /* ===== Editor state ===== */
@@ -21,6 +25,7 @@ let _pinModalArticle = null;
 
 /* ===== DOM refs ===== */
 const feed         = document.getElementById('feed');
+const sentinel     = document.getElementById('feed-sentinel');
 const errorState   = document.getElementById('error-state');
 const errorMsg     = document.getElementById('error-msg');
 const emptyState   = document.getElementById('empty-state');
@@ -144,7 +149,7 @@ themeBtn.addEventListener('click', () => {
 function createCard(article) {
   const a = document.createElement('a');
   a.className = 'card';
-  if (article.pinned) a.classList.add('card--pinned');
+
   a.href = article.url;
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
@@ -158,7 +163,6 @@ function createCard(article) {
 
   a.innerHTML = `
     <div class="card-body">
-      ${isPinned ? `<div class="pinned-bar"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3a1 1 0 0 1 .7 1.7l-1.4 1.4 1 3.6a1 1 0 0 1-.3 1l-3 2.6V17a1 1 0 0 1-.3.7l-2 2a1 1 0 0 1-1.5-1.3l.1-.1 1.7-1.7v-4.3a1 1 0 0 1 .3-.7l3-2.6-.9-3.3 1.5-1.5A1 1 0 0 1 16 3zm-5.7 11.6L4 21.3a1 1 0 0 0 1.3 1.5l.1-.1 6.3-6.3-1.4-.8z"/></svg> Curated${article.note ? ` · <span class="pinned-note">${escHtml(article.note)}</span>` : ''}</div>` : ''}
       <div class="card-meta">
         <div class="source-avatar">
           ${faviconUrl ? `<img src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
@@ -295,20 +299,31 @@ function renderFeed() {
     filtered = filtered.filter(a => a.category === activeFilter);
   }
 
-  feed.innerHTML = '';
+  _filteredArticles = filtered;
+  _renderedCount    = 0;
+  feed.innerHTML    = '';
   errorState.style.display = 'none';
   emptyState.style.display = 'none';
 
   if (filtered.length === 0) {
     emptyState.style.display = 'flex';
     articleCount.textContent = '0 articles';
+    sentinel.style.display   = 'none';
     return;
   }
 
+  appendBatch();
+}
+
+function appendBatch() {
+  const batch = _filteredArticles.slice(_renderedCount, _renderedCount + PAGE_SIZE);
+  if (!batch.length) return;
   const frag = document.createDocumentFragment();
-  filtered.forEach(a => frag.appendChild(createCard(a)));
+  batch.forEach(a => frag.appendChild(createCard(a)));
   feed.appendChild(frag);
-  articleCount.textContent = `${filtered.length} article${filtered.length !== 1 ? 's' : ''}`;
+  _renderedCount += batch.length;
+  articleCount.textContent = `${_filteredArticles.length} article${_filteredArticles.length !== 1 ? 's' : ''}`;
+  sentinel.style.display = _renderedCount < _filteredArticles.length ? '' : 'none';
 }
 
 /* ===== Subtitle helper ===== */
@@ -321,15 +336,7 @@ const REGION_LABELS = {
   mena:     'MENA',
 };
 
-function updateSubtitle() {
-  const rangeLabel = activeDays === 0 ? 'All time'
-    : activeDays === 1 ? 'Past 24h'
-    : activeDays === 3 ? 'Past 3 days'
-    : activeDays === 7 ? 'Past 7 days'
-    : 'Past 30 days';
-  const regionLabel = REGION_LABELS[activeRegion] || 'Global';
-  brandSub.textContent = `${rangeLabel} · ${regionLabel}`;
-}
+function updateSubtitle() {}
 
 /* ===== Fetch news ===== */
 async function fetchNews(force = false) {
@@ -858,6 +865,12 @@ editorPinClose.addEventListener('click', closePinModal);
 editorPinOverlay.addEventListener('click', e => { if (e.target === editorPinOverlay) closePinModal(); });
 editorPinSubmit.addEventListener('click', submitPin);
 editorPinNote.addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
+
+/* ===== Infinite scroll ===== */
+const scrollObserver = new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting) appendBatch();
+}, { rootMargin: '300px' });
+scrollObserver.observe(sentinel);
 
 /* ===== Init ===== */
 updateSubtitle();
