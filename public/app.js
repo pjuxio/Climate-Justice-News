@@ -29,7 +29,6 @@ const sentinel     = document.getElementById('feed-sentinel');
 const errorState   = document.getElementById('error-state');
 const errorMsg     = document.getElementById('error-msg');
 const emptyState   = document.getElementById('empty-state');
-const refreshBtn   = document.getElementById('refresh-btn');
 const themeBtn     = document.getElementById('theme-btn');
 const retryBtn     = document.getElementById('retry-btn');
 const clearFilter  = document.getElementById('clear-filter-btn');
@@ -340,7 +339,6 @@ function updateSubtitle() {}
 
 /* ===== Fetch news ===== */
 async function fetchNews(force = false) {
-  refreshBtn.classList.add('spinning');
   errorState.style.display = 'none';
   emptyState.style.display = 'none';
 
@@ -373,8 +371,6 @@ async function fetchNews(force = false) {
     feed.innerHTML = '';
     errorState.style.display = 'flex';
     errorMsg.textContent = err.message || 'Unable to connect to the server.';
-  } finally {
-    refreshBtn.classList.remove('spinning');
   }
 }
 
@@ -420,9 +416,8 @@ regionBtns.forEach(btn => {
   });
 });
 
-/* ===== Refresh button ===== */
-refreshBtn.addEventListener('click', () => fetchNews(true));
-retryBtn.addEventListener('click',   () => fetchNews(true));
+/* ===== Retry button ===== */
+retryBtn.addEventListener('click', () => fetchNews(true));
 
 /* ===== Info modal ===== */
 function openModal() {
@@ -448,10 +443,6 @@ document.addEventListener('keydown', e => {
     if (editorManageOverlay.style.display !== 'none') { closeEditorManage();  return; }
     if (editorLoginOverlay.style.display  !== 'none') { closeEditorLogin();   return; }
     if (modalOverlay.style.display        !== 'none') { closeModal();         return; }
-  }
-  if (e.key === 'r' || e.key === 'R') {
-    const tag = document.activeElement.tagName;
-    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') fetchNews(true);
   }
   /* Ctrl+Shift+E → toggle editor mode */
   if ((e.key === 'E' || e.key === 'e') && e.ctrlKey && e.shiftKey) {
