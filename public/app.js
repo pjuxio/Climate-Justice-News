@@ -332,7 +332,21 @@ const REGION_LABELS = {
   mena:     'MENA',
 };
 
-function updateSubtitle() {}
+function updateSubtitle() {
+  if (!brandSub) return;
+  const parts = [];
+  if (activeRegion && activeRegion !== 'global') {
+    parts.push(REGION_LABELS[activeRegion] || activeRegion);
+  }
+  if (activeDays === 1) parts.push('Last 24h');
+  else if (activeDays === 3) parts.push('Last 3 days');
+  else if (activeDays === 7) parts.push('Last 7 days');
+  else if (activeDays === 30) parts.push('Last 30 days');
+
+  brandSub.textContent = parts.length
+    ? 'Curated news · ' + parts.join(' · ')
+    : 'A curated news feed for the movement';
+}
 
 /* ===== Fetch news ===== */
 async function fetchNews(force = false) {
