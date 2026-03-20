@@ -32,7 +32,6 @@ const emptyState   = document.getElementById('empty-state');
 const themeBtn     = document.getElementById('theme-btn');
 const retryBtn     = document.getElementById('retry-btn');
 const clearFilter  = document.getElementById('clear-filter-btn');
-const articleCount = document.getElementById('article-count');
 const toast        = document.getElementById('toast');
 const filterChips  = document.querySelectorAll('.filter-chip');
 const rangeBtns    = document.querySelectorAll('[data-days]');
@@ -306,7 +305,6 @@ function renderFeed() {
 
   if (filtered.length === 0) {
     emptyState.style.display = 'flex';
-    articleCount.textContent = '0 articles';
     sentinel.style.display   = 'none';
     return;
   }
@@ -321,7 +319,6 @@ function appendBatch() {
   batch.forEach(a => frag.appendChild(createCard(a)));
   feed.appendChild(frag);
   _renderedCount += batch.length;
-  articleCount.textContent = `${_filteredArticles.length} article${_filteredArticles.length !== 1 ? 's' : ''}`;
   sentinel.style.display = _renderedCount < _filteredArticles.length ? '' : 'none';
 }
 
@@ -663,10 +660,6 @@ async function editorRemoveManual(url) {
   }
 }
 
-function updateArticleCount() {
-  const cards = feed.querySelectorAll('.card:not(.card--removing)');
-  articleCount.textContent = `${cards.length} article${cards.length !== 1 ? 's' : ''}`;
-}
 
 /* ===== Browse overlay ===== */
 
