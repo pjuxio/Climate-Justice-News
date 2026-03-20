@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-A real-time climate justice news aggregator with a social media-style card feed. Articles are pulled from [NewsAPI](https://newsapi.org) using a broad set of justice-framing search terms and can be filtered by region, category, sort order, and date range.
+A curated climate justice news feed for the movement. Editors hand-pick articles from NewsAPI and publish them to a clean, filterable public feed. Visitors browse the curated selection — no algorithm, no noise.
 
 **Live:** [climatejustice.news](https://climatejustice.news) · **Repo:** [github.com/pjuxio/Climate-Justice-News](https://github.com/pjuxio/Climate-Justice-News) · **Maintainer:** [@pjuxio](https://github.com/pjuxio)
 
@@ -15,9 +15,28 @@ A real-time climate justice news aggregator with a social media-style card feed.
 | Layer | Tech |
 |---|---|
 | Backend | Node.js · Express |
-| News data | [NewsAPI](https://newsapi.org) (`/v2/everything`) |
+| Database | PostgreSQL (JSONB) |
+| News source | [NewsAPI](https://newsapi.org) (`/v2/everything`) — editor only |
 | Frontend | Vanilla HTML · CSS · JS (no build step) |
 | Hosting | Heroku |
+
+---
+
+## How it works
+
+### For visitors
+
+The public feed shows only articles that an editor has pinned. Articles are filtered client-side by **date range**, **region**, and **category**. The feed loads 15 articles at a time with infinite scroll.
+
+### For editors
+
+Editors activate editor mode with **Ctrl+Shift+E** and enter their token. From there:
+
+- **Browse** — opens a card-grid discovery view of live NewsAPI results. Editors browse by sort order, date range, and region.
+- **Pin to feed** — clicking any card opens a modal to assign a region and optional editorial note before publishing to the public feed.
+- **Manage** — view and remove currently pinned articles.
+
+Pinned articles are stored in PostgreSQL and served instantly to all visitors.
 
 ---
 
@@ -25,14 +44,14 @@ A real-time climate justice news aggregator with a social media-style card feed.
 
 ```
 .
-├── server.js           # Express server — API proxy + static file serving
+├── server.js           # Express server — public feed, editor browse, curation endpoints
 ├── package.json
 ├── .env.example        # Environment variable template
 ├── .gitignore
 └── public/
-    ├── index.html      # App shell, filter/control markup, info modal
+    ├── index.html      # App shell, filter controls, browse overlay, pin modal
     ├── style.css       # Design tokens, dark/light theme, all component styles
-    └── app.js          # State management, fetch logic, card rendering
+    └── app.js          # State management, fetch logic, card rendering, editor mode
 ```
 
 ---
@@ -47,98 +66,61 @@ cd Climate-Justice-Feed
 npm install
 ```
 
-### 2. Add your NewsAPI key
-
-Get a free key at [newsapi.org/register](https://newsapi.org/register), then:
+### 2. Set up environment variables
 
 ```bash
 cp .env.example .env
-# open .env and set:
-# NEWSAPI_KEY=your_key_here
+```
+
+Then edit `.env`:
+
+```
+NEWSAPI_KEY=your_newsapi_key
+DATABASE_URL=your_postgres_connection_string
+EDITOR_TOKEN=choose_a_secret_token
 ```
 
 ### 3. Run locally
 
 ```bash
-npm start
+npm run dev   # auto-restart on changes
 # → http://localhost:3000
-
-# Or with auto-restart on file changes:
-npm run dev
 ```
 
 ---
 
-## How it works
+## API
 
-### Search query
+### Public
 
-Every request to `/api/news` builds a query from two parts:
+| Endpoint | Description |
+|---|---|
+| `GET /api/news` | Returns the curated feed (merged pinned + manual articles, sorted by date) |
+| `GET /api/curation` | Returns current curation state `{ pinned[], manual[] }` |
 
-**Base terms** (always included, joined with `OR`):
-```
-"climate justice" OR "environmental justice" OR "climate equity"
-OR "climate racism" OR "just transition"
-```
+### Editor (`X-Editor-Token` header required)
 
-**Regional focus** (optional, ANDed with the base query):
-```
-AND (Africa OR Nigeria OR Kenya OR Ghana OR "South Africa" ...)
-```
+| Endpoint | Description |
+|---|---|
+| `GET /api/editor/browse` | NewsAPI discovery (params: `sortBy`, `days`, `region`, `force`) |
+| `POST /api/curation/pin` | Pin article (full article data + `region` + optional `note`) |
+| `DELETE /api/curation/pin` | Unpin article by URL |
+| `POST /api/curation/manual` | Add article by URL (server fetches metadata) |
+| `DELETE /api/curation/manual` | Remove manual article by URL |
 
-This means a regional result must contain both the justice framing *and* the geographic terms — not just be published by a regional outlet.
+---
 
-### API endpoint
+## Article categories
 
-```
-GET /api/news?sortBy=popularity&days=7&region=global
-```
-
-| Param | Values | Default |
-|---|---|---|
-| `sortBy` | `popularity` · `publishedAt` | `popularity` |
-| `days` | `1` · `3` · `7` · `30` | `7` |
-| `region` | `global` · `americas` · `africa` · `asia` · `europe` · `mena` | `global` |
-| `force` | `1` | — |
-
-Responses are cached in memory per `sortBy_days_region` combination with a **5-minute TTL**. Pass `force=1` to bypass the cache.
-
-### Article categorisation
-
-Each article is categorised server-side by scanning its headline and description against keyword patterns:
+Articles are categorised server-side by scanning headlines and descriptions:
 
 | Category | Keywords |
 |---|---|
 | Policy | legislation, law, government, bill, regulation, COP |
 | Community | community, grassroots, activist, protest, movement, indigenous |
-| Science | science, research, study, data, report, temperature, emission |
-| Environment | environment, ecosystem, biodiversity, nature, ocean, forest, wildlife |
+| Science | research, study, data, report, temperature, emission |
+| Environment | ecosystem, biodiversity, nature, ocean, forest, wildlife |
 | General | everything else |
-
----
-
-## Extending the search
-
-To add new search terms, edit `BASE_QUERY` in [server.js](server.js):
-
-```js
-const BASE_QUERY =
-  '"climate justice" OR "environmental justice" OR "climate equity"
-   OR "climate racism" OR "just transition"';
-```
-
-To add or modify regional focus terms, edit the `REGION_TERMS` map in [server.js](server.js):
-
-```js
-const REGION_TERMS = {
-  global:   null,
-  americas: '"North America" OR "Latin America" OR ...',
-  africa:   'Africa OR Nigeria OR Kenya OR ...',
-  // add new regions here
-};
-```
-
-Any new region key added here also needs a matching button in [public/index.html](public/index.html) (`data-region="your-key"`) and a label entry in `REGION_LABELS` in [public/app.js](public/app.js).
 
 ---
 
@@ -148,18 +130,22 @@ Any new region key added here also needs a matching button in [public/index.html
 
 ```bash
 heroku git:remote -a your-app-name
-heroku config:set NEWSAPI_KEY=your_key_here
+heroku config:set NEWSAPI_KEY=your_key
+heroku config:set DATABASE_URL=your_postgres_url
+heroku config:set EDITOR_TOKEN=your_secret_token
 git push heroku main
 ```
+
+### Cache busting
+
+Static assets are cached for 24 hours. On each deploy, the server reads the current git commit hash and injects it as a `?v=<hash>` query string into the `app.js` and `style.css` references in `index.html`, so browsers always load fresh assets after a deploy.
 
 ### Custom domain
 
 1. In Heroku Dashboard → **Settings → Domains**, add `climatejustice.news` and `www.climatejustice.news`
-2. Heroku will provide a DNS target (e.g. `your-app.herokudns.com`)
-3. At your registrar, add:
+2. At your registrar:
    - `CNAME www → your-app.herokudns.com`
-   - `ALIAS` / `ANAME` for the apex (`@`) → same target
-     *(or use Cloudflare for CNAME flattening on the apex)*
+   - `ALIAS` / `ANAME` apex `@` → same target *(or use Cloudflare for CNAME flattening)*
 
 ---
 
@@ -167,10 +153,10 @@ git push heroku main
 
 | Variable | Required | Description |
 |---|---|---|
-| `NEWSAPI_KEY` | Yes | Your NewsAPI.org API key |
+| `NEWSAPI_KEY` | Yes | NewsAPI.org API key |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `EDITOR_TOKEN` | No | Secret token for editor curation mode |
 | `PORT` | No | Server port (default: `3000`) |
-| `EDITOR_TOKEN` | No | Secret token enabling editor curation (pin/hide articles) |
-| `DATABASE_URL` | No | PostgreSQL connection string for persistent curation |
 
 ---
 
@@ -181,8 +167,6 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) to get
 - Bug reports → [open an issue](https://github.com/pjuxio/Climate-Justice-News/issues/new/choose)
 - Feature requests → [open an issue](https://github.com/pjuxio/Climate-Justice-News/issues/new/choose)
 - Code → fork, branch, PR against `main`
-
-This project is led by [@pjuxio](https://github.com/pjuxio). All PRs are reviewed by the maintainer.
 
 ---
 
