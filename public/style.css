@@ -999,6 +999,100 @@ kbd {
   text-overflow: ellipsis;
 }
 
+/* ===== Browse overlay ===== */
+.modal--wide { max-width: 720px; }
+
+.browse-controls {
+  padding: 10px 22px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.browse-controls::-webkit-scrollbar { display: none; }
+
+.discovery-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.discovery-card:last-child { border-bottom: none; }
+
+.discovery-card-info { flex: 1; min-width: 0; }
+
+.discovery-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.discovery-source {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.discovery-time {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.discovery-card-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.discovery-card-actions { flex-shrink: 0; padding-top: 2px; }
+
+.discovery-pinned-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 4px 10px;
+  background: var(--accent-dim);
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+/* Editor select input */
+.editor-select {
+  width: 100%;
+  background: var(--chip-bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.875rem;
+  padding: 10px 14px;
+  outline: none;
+  cursor: pointer;
+}
+.editor-select:focus {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+/* Remove button (manual articles) */
+.editor-remove-btn {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+.editor-remove-btn:hover {
+  background: #ef4444;
+  color: #fff;
+  border-color: #ef4444;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 520px) {
   .brand-sub { display: none; }

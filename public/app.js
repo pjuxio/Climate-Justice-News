@@ -1,55 +1,84 @@
 /* ===== State ===== */
 let allArticles = [];
 let activeFilter = 'All';
-let activeSortBy  = 'popularity';
-let activeDays    = 7;
-let activeRegion  = 'global';
+let activeDays   = 0;        // 0 = All time
+let activeRegion = 'global';
 let bookmarks = new Set(JSON.parse(localStorage.getItem('cj_bookmarks') || '[]'));
-// true = feed is filtered to show only Highlights; false = all articles interleaved by date
-let picksFilterActive = false;
 
 /* ===== Editor state ===== */
 let isEditorMode = false;
 let editorToken  = sessionStorage.getItem('cj_editor_token') || '';
-// curationData mirrors what the server holds — updated after every editor action
-let curationData = { hidden: [], pinned: [] };
+let curationData = { pinned: [], manual: [] };
+
+/* Browse state */
+let browseArticles = [];
+let browseSortBy   = 'popularity';
+let browseDays     = 7;
+let browseRegion   = 'global';
+
+/* Pin modal state */
+let _pinModalArticle = null;
 
 /* ===== DOM refs ===== */
-const feed        = document.getElementById('feed');
-const errorState  = document.getElementById('error-state');
-const errorMsg    = document.getElementById('error-msg');
-const emptyState  = document.getElementById('empty-state');
-const refreshBtn  = document.getElementById('refresh-btn');
-const themeBtn    = document.getElementById('theme-btn');
-const retryBtn    = document.getElementById('retry-btn');
-const clearFilter = document.getElementById('clear-filter-btn');
-const articleCount= document.getElementById('article-count');
-const toast       = document.getElementById('toast');
-const filterChips = document.querySelectorAll('.filter-chip');
-const sortBtns    = document.querySelectorAll('[data-sort]');
-const rangeBtns   = document.querySelectorAll('[data-days]');
-const regionBtns  = document.querySelectorAll('[data-region]');
-const brandSub    = document.getElementById('brand-sub');
+const feed         = document.getElementById('feed');
+const errorState   = document.getElementById('error-state');
+const errorMsg     = document.getElementById('error-msg');
+const emptyState   = document.getElementById('empty-state');
+const refreshBtn   = document.getElementById('refresh-btn');
+const themeBtn     = document.getElementById('theme-btn');
+const retryBtn     = document.getElementById('retry-btn');
+const clearFilter  = document.getElementById('clear-filter-btn');
+const articleCount = document.getElementById('article-count');
+const toast        = document.getElementById('toast');
+const filterChips  = document.querySelectorAll('.filter-chip');
+const rangeBtns    = document.querySelectorAll('[data-days]');
+const regionBtns   = document.querySelectorAll('[data-region]');
+const brandSub     = document.getElementById('brand-sub');
 const themeIconDark  = document.getElementById('theme-icon-dark');
 const themeIconLight = document.getElementById('theme-icon-light');
 const infoBtn        = document.getElementById('info-btn');
 const modalOverlay   = document.getElementById('modal-overlay');
 const modalClose     = document.getElementById('modal-close');
-const picksToggleBtn = document.getElementById('picks-toggle-btn');
 
 /* Editor DOM refs */
-const editorBanner       = document.getElementById('editor-banner');
-const editorCounts       = document.getElementById('editor-counts');
-const editorManageBtn    = document.getElementById('editor-manage-btn');
-const editorExitBtn      = document.getElementById('editor-exit-btn');
-const editorLoginOverlay = document.getElementById('editor-login-overlay');
-const editorLoginClose   = document.getElementById('editor-login-close');
-const editorTokenInput   = document.getElementById('editor-token-input');
-const editorLoginSubmit  = document.getElementById('editor-login-submit');
-const editorLoginError   = document.getElementById('editor-login-error');
-const editorManageOverlay= document.getElementById('editor-manage-overlay');
-const editorManageClose  = document.getElementById('editor-manage-close');
-const editorManageBody   = document.getElementById('editor-manage-body');
+const editorBanner        = document.getElementById('editor-banner');
+const editorCounts        = document.getElementById('editor-counts');
+const editorBrowseBtn     = document.getElementById('editor-browse-btn');
+const editorManageBtn     = document.getElementById('editor-manage-btn');
+const editorExitBtn       = document.getElementById('editor-exit-btn');
+const editorLoginOverlay  = document.getElementById('editor-login-overlay');
+const editorLoginClose    = document.getElementById('editor-login-close');
+const editorTokenInput    = document.getElementById('editor-token-input');
+const editorLoginSubmit   = document.getElementById('editor-login-submit');
+const editorLoginError    = document.getElementById('editor-login-error');
+const editorManageOverlay = document.getElementById('editor-manage-overlay');
+const editorManageClose   = document.getElementById('editor-manage-close');
+const editorManageBody    = document.getElementById('editor-manage-body');
+
+/* Browse overlay DOM refs */
+const editorBrowseOverlay = document.getElementById('editor-browse-overlay');
+const editorBrowseClose   = document.getElementById('editor-browse-close');
+const editorBrowseBody    = document.getElementById('editor-browse-body');
+const browseSortBtns      = document.querySelectorAll('[data-browse-sort]');
+const browseDaysBtns      = document.querySelectorAll('[data-browse-days]');
+const browseRegionBtns    = document.querySelectorAll('[data-browse-region]');
+
+/* Pin modal DOM refs */
+const editorPinOverlay      = document.getElementById('editor-pin-overlay');
+const editorPinClose        = document.getElementById('editor-pin-close');
+const editorPinArticleTitle = document.getElementById('editor-pin-article-title');
+const editorPinRegion       = document.getElementById('editor-pin-region');
+const editorPinNote         = document.getElementById('editor-pin-note');
+const editorPinSubmit       = document.getElementById('editor-pin-submit');
+const editorPinError        = document.getElementById('editor-pin-error');
+
+/* ===== Body scroll management ===== */
+function updateBodyScroll() {
+  const anyOpen = [modalOverlay, editorLoginOverlay, editorManageOverlay,
+                   editorBrowseOverlay, editorPinOverlay]
+    .some(el => el && el.style.display !== 'none');
+  document.body.style.overflow = anyOpen ? 'hidden' : '';
+}
 
 /* ===== Helpers ===== */
 function timeAgo(iso) {
@@ -63,12 +92,7 @@ function timeAgo(iso) {
 }
 
 function initials(name) {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(w => w[0])
-    .join('')
-    .toUpperCase();
+  return name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 }
 
 function getFaviconUrl(articleUrl) {
@@ -83,6 +107,14 @@ function showToast(msg, duration = 2400) {
   toast.classList.add('show');
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => toast.classList.remove('show'), duration);
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 /* ===== Theme ===== */
@@ -120,18 +152,16 @@ function createCard(article) {
   a.dataset.url = article.url;
   a.dataset.category = article.category;
 
-  const faviconUrl = getFaviconUrl(article.url);
+  const faviconUrl   = getFaviconUrl(article.url);
   const isBookmarked = bookmarks.has(String(article.id));
-  const isPinned = !!article.pinned;
+  const isPinned     = !!article.pinned;
 
   a.innerHTML = `
     <div class="card-body">
       ${isPinned ? `<div class="pinned-bar"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3a1 1 0 0 1 .7 1.7l-1.4 1.4 1 3.6a1 1 0 0 1-.3 1l-3 2.6V17a1 1 0 0 1-.3.7l-2 2a1 1 0 0 1-1.5-1.3l.1-.1 1.7-1.7v-4.3a1 1 0 0 1 .3-.7l3-2.6-.9-3.3 1.5-1.5A1 1 0 0 1 16 3zm-5.7 11.6L4 21.3a1 1 0 0 0 1.3 1.5l.1-.1 6.3-6.3-1.4-.8z"/></svg> Curated${article.note ? ` · <span class="pinned-note">${escHtml(article.note)}</span>` : ''}</div>` : ''}
       <div class="card-meta">
         <div class="source-avatar">
-          ${faviconUrl
-            ? `<img src="${faviconUrl}" alt="" onerror="this.style.display='none'">`
-            : ''}
+          ${faviconUrl ? `<img src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
           <span>${initials(article.source)}</span>
         </div>
         <div class="source-info">
@@ -168,7 +198,7 @@ function createCard(article) {
   a.querySelector('.bookmark-btn').addEventListener('click', e => {
     e.preventDefault();
     e.stopPropagation();
-    const id = String(article.id);
+    const id  = String(article.id);
     const btn = e.currentTarget;
     const svg = btn.querySelector('svg');
     if (bookmarks.has(id)) {
@@ -205,7 +235,7 @@ function createCard(article) {
     }
   });
 
-  /* Open btn — card is already an <a>, button just signals intent visually */
+  /* Open btn */
   a.querySelector('.card-open-btn').addEventListener('click', e => {
     e.preventDefault();
     e.stopPropagation();
@@ -219,69 +249,55 @@ function createCard(article) {
 
     if (isPinned) {
       toolbar.innerHTML = `
-        <button class="editor-btn editor-unpin-btn" title="Unpin article">
+        <button class="editor-btn editor-unpin-btn">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           Unpin
         </button>`;
       toolbar.querySelector('.editor-unpin-btn').addEventListener('click', e => {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         editorUnpin(article.url);
       });
-    } else {
+    } else if (article.manual) {
       toolbar.innerHTML = `
-        <button class="editor-btn editor-pin-btn" title="Pin to top of feed">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3a1 1 0 0 1 .7 1.7l-1.4 1.4 1 3.6a1 1 0 0 1-.3 1l-3 2.6V17a1 1 0 0 1-.3.7l-2 2a1 1 0 0 1-1.5-1.3l.1-.1 1.7-1.7v-4.3a1 1 0 0 1 .3-.7l3-2.6-.9-3.3 1.5-1.5A1 1 0 0 1 16 3zm-5.7 11.6L4 21.3a1 1 0 0 0 1.3 1.5l.1-.1 6.3-6.3-1.4-.8z"/></svg>
-          Pin
-        </button>
-        <button class="editor-btn editor-hide-btn" title="Hide from feed">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Hide
+        <button class="editor-btn editor-remove-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Remove
         </button>`;
-      toolbar.querySelector('.editor-pin-btn').addEventListener('click', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        editorPin(article);
-      });
-      toolbar.querySelector('.editor-hide-btn').addEventListener('click', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        editorHide(article);
+      toolbar.querySelector('.editor-remove-btn').addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        editorRemoveManual(article.url);
       });
     }
 
-    a.appendChild(toolbar);
+    if (toolbar.firstElementChild) a.appendChild(toolbar);
   }
 
   return a;
 }
 
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 /* ===== Render filtered feed ===== */
 function renderFeed() {
-  let filtered = activeFilter === 'All'
-    ? allArticles
-    : allArticles.filter(a => a.category === activeFilter);
+  let filtered = allArticles;
 
-  // Filter to only Highlights when active; otherwise interleave picks by date.
-  if (picksFilterActive) {
-    filtered = filtered.filter(a => a.pinned);
-  } else if (filtered.some(a => a.pinned)) {
-    filtered = [...filtered].sort((a, b) =>
-      new Date(b.publishedAt) - new Date(a.publishedAt)
-    );
+  // Date range filter (activeDays = 0 means "All time")
+  if (activeDays > 0) {
+    const cutoff = Date.now() - activeDays * 86_400_000;
+    filtered = filtered.filter(a => new Date(a.publishedAt).getTime() >= cutoff);
+  }
+
+  // Region filter
+  if (activeRegion !== 'global') {
+    filtered = filtered.filter(a => (a.region || 'global') === activeRegion);
+  }
+
+  // Category filter
+  if (activeFilter !== 'All') {
+    filtered = filtered.filter(a => a.category === activeFilter);
   }
 
   feed.innerHTML = '';
-  errorState.style.display  = 'none';
-  emptyState.style.display  = 'none';
+  errorState.style.display = 'none';
+  emptyState.style.display = 'none';
 
   if (filtered.length === 0) {
     emptyState.style.display = 'flex';
@@ -306,13 +322,13 @@ const REGION_LABELS = {
 };
 
 function updateSubtitle() {
-  const sortLabel  = activeSortBy === 'popularity' ? 'Top' : 'Latest';
-  const rangeLabel = activeDays === 1 ? '24h'
-    : activeDays === 3 ? '3 days'
-    : activeDays === 7 ? '7 days'
-    : '30 days';
+  const rangeLabel = activeDays === 0 ? 'All time'
+    : activeDays === 1 ? 'Past 24h'
+    : activeDays === 3 ? 'Past 3 days'
+    : activeDays === 7 ? 'Past 7 days'
+    : 'Past 30 days';
   const regionLabel = REGION_LABELS[activeRegion] || 'Global';
-  brandSub.textContent = `${sortLabel} · ${rangeLabel} · ${regionLabel}`;
+  brandSub.textContent = `${rangeLabel} · ${regionLabel}`;
 }
 
 /* ===== Fetch news ===== */
@@ -323,7 +339,7 @@ async function fetchNews(force = false) {
 
   /* Show skeletons only on first load */
   if (allArticles.length === 0) {
-    feed.innerHTML = [1,2,3].map(() => `
+    feed.innerHTML = [1, 2, 3].map(() => `
       <div class="skeleton-card">
         <div class="sk sk-header"></div>
         <div class="sk sk-title"></div>
@@ -338,17 +354,14 @@ async function fetchNews(force = false) {
   updateSubtitle();
 
   try {
-    const params = new URLSearchParams({ sortBy: activeSortBy, days: activeDays, region: activeRegion });
-    if (force) params.set('force', '1');
-    const res  = await fetch(`/api/news?${params}`);
+    const res  = await fetch('/api/news');
     const data = await res.json();
 
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
     allArticles = data.articles;
     renderFeed();
-
-    if (force) showToast(data.cached ? 'Feed is up to date' : 'Feed refreshed');
+    if (force) showToast('Feed refreshed');
   } catch (err) {
     feed.innerHTML = '';
     errorState.style.display = 'flex';
@@ -375,18 +388,6 @@ clearFilter.addEventListener('click', () => {
   renderFeed();
 });
 
-/* ===== Sort buttons ===== */
-sortBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    if (btn.dataset.sort === activeSortBy) return;
-    sortBtns.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    activeSortBy = btn.dataset.sort;
-    allArticles = [];
-    fetchNews(true);
-  });
-});
-
 /* ===== Range buttons ===== */
 rangeBtns.forEach(btn => {
   btn.addEventListener('click', () => {
@@ -395,8 +396,8 @@ rangeBtns.forEach(btn => {
     rangeBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     activeDays = d;
-    allArticles = [];
-    fetchNews(true);
+    updateSubtitle();
+    renderFeed();
   });
 });
 
@@ -407,25 +408,25 @@ regionBtns.forEach(btn => {
     regionBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     activeRegion = btn.dataset.region;
-    allArticles = [];
-    fetchNews(true);
+    updateSubtitle();
+    renderFeed();
   });
 });
 
 /* ===== Refresh button ===== */
 refreshBtn.addEventListener('click', () => fetchNews(true));
-retryBtn.addEventListener('click', () => fetchNews(true));
+retryBtn.addEventListener('click',   () => fetchNews(true));
 
 /* ===== Info modal ===== */
 function openModal() {
   modalOverlay.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
+  updateBodyScroll();
   modalClose.focus();
 }
 
 function closeModal() {
   modalOverlay.style.display = 'none';
-  document.body.style.overflow = '';
+  updateBodyScroll();
 }
 
 infoBtn.addEventListener('click', openModal);
@@ -435,14 +436,15 @@ modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) clo
 /* ===== Keyboard shortcuts ===== */
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (modalOverlay.style.display !== 'none') { closeModal(); return; }
-    if (editorLoginOverlay.style.display !== 'none') { closeEditorLogin(); return; }
-    if (editorManageOverlay.style.display !== 'none') { closeEditorManage(); return; }
+    if (editorPinOverlay.style.display    !== 'none') { closePinModal();      return; }
+    if (editorBrowseOverlay.style.display !== 'none') { closeBrowse();        return; }
+    if (editorManageOverlay.style.display !== 'none') { closeEditorManage();  return; }
+    if (editorLoginOverlay.style.display  !== 'none') { closeEditorLogin();   return; }
+    if (modalOverlay.style.display        !== 'none') { closeModal();         return; }
   }
   if (e.key === 'r' || e.key === 'R') {
-    if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-      fetchNews(true);
-    }
+    const tag = document.activeElement.tagName;
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') fetchNews(true);
   }
   /* Ctrl+Shift+E → toggle editor mode */
   if ((e.key === 'E' || e.key === 'e') && e.ctrlKey && e.shiftKey) {
@@ -453,7 +455,7 @@ document.addEventListener('keydown', e => {
 
 /* ===== Sync main padding-top to sticky stack height ===== */
 const stickyStack = document.getElementById('sticky-stack');
-const mainEl = document.querySelector('.main');
+const mainEl      = document.querySelector('.main');
 
 function syncPadding() {
   mainEl.style.paddingTop = (stickyStack.offsetHeight + 20) + 'px';
@@ -467,9 +469,8 @@ syncPadding();
 
 function updateEditorCounts() {
   const p = curationData.pinned.length;
-  const h = curationData.hidden.length;
-  editorCounts.textContent =
-    `${p} pinned · ${h} hidden`;
+  const m = (curationData.manual || []).length;
+  editorCounts.textContent = `${p} pinned · ${m} in feed`;
 }
 
 async function fetchCuration() {
@@ -486,27 +487,19 @@ function enterEditorMode() {
   isEditorMode = true;
   editorBanner.style.display = '';
   fetchCuration();
-  renderFeed(); // re-render cards with editor toolbars
+  renderFeed();
   showToast('Editor mode active · Ctrl+Shift+E to exit');
 }
 
 function exitEditorMode() {
   isEditorMode = false;
   editorBanner.style.display = 'none';
-  renderFeed(); // re-render cards without editor toolbars
+  renderFeed();
 }
 
 function toggleEditorMode() {
-  if (isEditorMode) {
-    exitEditorMode();
-    return;
-  }
-  /* If we already have a stored token, try entering directly */
-  if (editorToken) {
-    enterEditorMode();
-  } else {
-    openEditorLogin();
-  }
+  if (isEditorMode) { exitEditorMode(); return; }
+  if (editorToken)  { enterEditorMode(); } else { openEditorLogin(); }
 }
 
 /* ── Editor login modal ── */
@@ -514,13 +507,13 @@ function openEditorLogin() {
   editorLoginError.style.display = 'none';
   editorTokenInput.value = '';
   editorLoginOverlay.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
+  updateBodyScroll();
   setTimeout(() => editorTokenInput.focus(), 60);
 }
 
 function closeEditorLogin() {
   editorLoginOverlay.style.display = 'none';
-  document.body.style.overflow = '';
+  updateBodyScroll();
 }
 
 editorLoginClose.addEventListener('click', closeEditorLogin);
@@ -535,7 +528,6 @@ async function submitEditorLogin() {
   editorLoginError.style.display = 'none';
 
   try {
-    /* Verify token using the dedicated read-only verification endpoint */
     const res = await fetch('/api/curation/verify', {
       headers: { 'X-Editor-Token': token },
     });
@@ -566,23 +558,20 @@ editorLoginSubmit.addEventListener('click', submitEditorLogin);
 editorTokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') submitEditorLogin(); });
 
 /* ── Editor banner controls ── */
-editorExitBtn.addEventListener('click', () => {
-  exitEditorMode();
-  showToast('Exited editor mode');
-});
-
+editorExitBtn.addEventListener('click', () => { exitEditorMode(); showToast('Exited editor mode'); });
+editorBrowseBtn.addEventListener('click', openBrowse);
 editorManageBtn.addEventListener('click', openEditorManage);
 
 /* ── Editor manage modal ── */
 function openEditorManage() {
   renderEditorManage();
   editorManageOverlay.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
+  updateBodyScroll();
 }
 
 function closeEditorManage() {
   editorManageOverlay.style.display = 'none';
-  document.body.style.overflow = '';
+  updateBodyScroll();
 }
 
 editorManageClose.addEventListener('click', closeEditorManage);
@@ -590,40 +579,41 @@ editorManageOverlay.addEventListener('click', e => { if (e.target === editorMana
 
 function renderEditorManage() {
   const pinned = curationData.pinned || [];
-  const hidden = curationData.hidden || [];
+  const manual = curationData.manual || [];
 
   editorManageBody.innerHTML = `
     <section class="info-section">
       <h3 class="info-heading">Pinned (${pinned.length})</h3>
       ${pinned.length === 0
-        ? '<p style="font-size:0.875rem;color:var(--text-muted)">No pinned articles. Pin articles from the feed using editor mode.</p>'
+        ? '<p style="font-size:0.875rem;color:var(--text-muted)">No pinned articles.</p>'
         : pinned.map(p => `
           <div class="manage-row" data-url="${escHtml(p.url)}">
             <div class="manage-row-info">
               <div class="manage-row-title">${escHtml(p.title || p.url)}</div>
-              <div class="manage-row-meta">${escHtml(p.source || '')}${p.note ? ` · <em>${escHtml(p.note)}</em>` : ''}</div>
+              <div class="manage-row-meta">${escHtml(p.source || '')}${p.note ? ` · <em>${escHtml(p.note)}</em>` : ''} · ${escHtml(REGION_LABELS[p.region] || 'Global')}</div>
             </div>
             <button class="editor-btn editor-unpin-btn manage-unpin-btn" data-url="${escHtml(p.url)}">Unpin</button>
           </div>`).join('')}
     </section>
     <section class="info-section">
-      <h3 class="info-heading">Hidden (${hidden.length})</h3>
-      ${hidden.length === 0
-        ? '<p style="font-size:0.875rem;color:var(--text-muted)">No hidden articles.</p>'
-        : hidden.map(url => `
-          <div class="manage-row" data-url="${escHtml(url)}">
+      <h3 class="info-heading">In Feed (${manual.length})</h3>
+      ${manual.length === 0
+        ? '<p style="font-size:0.875rem;color:var(--text-muted)">No manually added articles.</p>'
+        : manual.map(m => `
+          <div class="manage-row" data-url="${escHtml(m.url)}">
             <div class="manage-row-info">
-              <div class="manage-row-title manage-row-url">${escHtml(url)}</div>
+              <div class="manage-row-title">${escHtml(m.title || m.url)}</div>
+              <div class="manage-row-meta">${escHtml(m.source || '')} · ${escHtml(REGION_LABELS[m.region] || 'Global')}</div>
             </div>
-            <button class="editor-btn editor-unhide-btn manage-unhide-btn" data-url="${escHtml(url)}">Unhide</button>
+            <button class="editor-btn editor-remove-btn manage-remove-btn" data-url="${escHtml(m.url)}">Remove</button>
           </div>`).join('')}
     </section>`;
 
   editorManageBody.querySelectorAll('.manage-unpin-btn').forEach(btn => {
     btn.addEventListener('click', () => editorUnpin(btn.dataset.url));
   });
-  editorManageBody.querySelectorAll('.manage-unhide-btn').forEach(btn => {
-    btn.addEventListener('click', () => editorUnhide(btn.dataset.url));
+  editorManageBody.querySelectorAll('.manage-remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => editorRemoveManual(btn.dataset.url));
   });
 }
 
@@ -636,7 +626,6 @@ async function curationRequest(method, path, body) {
     body: JSON.stringify(body),
   });
   if (res.status === 401) {
-    /* Token rejected — clear it and drop out of editor mode */
     editorToken = '';
     sessionStorage.removeItem('cj_editor_token');
     exitEditorMode();
@@ -650,72 +639,27 @@ async function curationRequest(method, path, body) {
   return res.json();
 }
 
-async function editorHide(article) {
-  try {
-    await curationRequest('POST', '/api/curation/hide', { url: article.url });
-    curationData.hidden.push(article.url);
-    updateEditorCounts();
-    /* Remove the card from view immediately */
-    const card = feed.querySelector(`[data-url="${CSS.escape(article.url)}"]`);
-    if (card) {
-      card.classList.add('card--removing');
-      setTimeout(() => { card.remove(); updateArticleCount(); }, 300);
-    }
-    showToast('Article hidden from feed');
-  } catch (err) {
-    showToast(`Error: ${err.message}`);
-  }
-}
-
-async function editorUnhide(url) {
-  try {
-    await curationRequest('DELETE', '/api/curation/hide', { url });
-    curationData.hidden = curationData.hidden.filter(u => u !== url);
-    updateEditorCounts();
-    /* Refresh feed to bring the article back */
-    await fetchNews(true);
-    renderEditorManage();
-    showToast('Article restored to feed');
-  } catch (err) {
-    showToast(`Error: ${err.message}`);
-  }
-}
-
-async function editorPin(article) {
-  const note = prompt('Optional editor note (leave blank for none):') ?? '';
-  if (note === null) return; // cancelled
-
-  try {
-    await curationRequest('POST', '/api/curation/pin', {
-      url: article.url,
-      title: article.title,
-      source: article.source,
-      author: article.author,
-      description: article.description,
-      image: article.image,
-      publishedAt: article.publishedAt,
-      readTime: article.readTime,
-      category: article.category,
-      note: note.trim(),
-    });
-    curationData.pinned.unshift({ ...article, note: note.trim() });
-    updateEditorCounts();
-    /* Refresh feed so pinned article appears at top with badge */
-    await fetchNews(true);
-    showToast('Article pinned to top of feed');
-  } catch (err) {
-    showToast(`Error: ${err.message}`);
-  }
-}
-
 async function editorUnpin(url) {
   try {
     await curationRequest('DELETE', '/api/curation/pin', { url });
     curationData.pinned = curationData.pinned.filter(p => p.url !== url);
     updateEditorCounts();
-    await fetchNews(true);
+    await fetchNews();
     if (editorManageOverlay.style.display !== 'none') renderEditorManage();
     showToast('Article unpinned');
+  } catch (err) {
+    showToast(`Error: ${err.message}`);
+  }
+}
+
+async function editorRemoveManual(url) {
+  try {
+    await curationRequest('DELETE', '/api/curation/manual', { url });
+    curationData.manual = (curationData.manual || []).filter(m => m.url !== url);
+    updateEditorCounts();
+    await fetchNews();
+    if (editorManageOverlay.style.display !== 'none') renderEditorManage();
+    showToast('Article removed from feed');
   } catch (err) {
     showToast(`Error: ${err.message}`);
   }
@@ -726,22 +670,195 @@ function updateArticleCount() {
   articleCount.textContent = `${cards.length} article${cards.length !== 1 ? 's' : ''}`;
 }
 
-/* ===== Highlights toggle ===== */
-function applyPicksToggle() {
-  picksToggleBtn.classList.toggle('active', picksFilterActive);
-  picksToggleBtn.title = picksFilterActive
-    ? "Showing Highlights — click to show all"
-    : "Show Highlights";
+/* ===== Browse overlay ===== */
+
+function openBrowse() {
+  editorBrowseOverlay.style.display = 'flex';
+  updateBodyScroll();
+  fetchBrowse();
 }
 
-picksToggleBtn.addEventListener('click', () => {
-  picksFilterActive = !picksFilterActive;
-  applyPicksToggle();
-  renderFeed();
-  showToast(picksFilterActive ? "Showing Highlights" : "Showing all articles");
+function closeBrowse() {
+  editorBrowseOverlay.style.display = 'none';
+  updateBodyScroll();
+}
+
+editorBrowseClose.addEventListener('click', closeBrowse);
+editorBrowseOverlay.addEventListener('click', e => { if (e.target === editorBrowseOverlay) closeBrowse(); });
+
+browseSortBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.browseSort === browseSortBy) return;
+    browseSortBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    browseSortBy = btn.dataset.browseSort;
+    fetchBrowse();
+  });
 });
 
-applyPicksToggle(); // sync button state on load
+browseDaysBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const d = Number(btn.dataset.browseDays);
+    if (d === browseDays) return;
+    browseDaysBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    browseDays = d;
+    fetchBrowse();
+  });
+});
+
+browseRegionBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.browseRegion === browseRegion) return;
+    browseRegionBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    browseRegion = btn.dataset.browseRegion;
+    fetchBrowse();
+  });
+});
+
+async function fetchBrowse() {
+  editorBrowseBody.innerHTML =
+    '<p style="padding:20px;color:var(--text-muted);font-size:0.875rem">Loading…</p>';
+  try {
+    const params = new URLSearchParams({ sortBy: browseSortBy, days: browseDays, region: browseRegion });
+    const res = await fetch(`/api/editor/browse?${params}`, {
+      headers: { 'X-Editor-Token': editorToken },
+    });
+
+    if (res.status === 401) {
+      editorToken = '';
+      sessionStorage.removeItem('cj_editor_token');
+      exitEditorMode();
+      closeBrowse();
+      showToast('Session expired. Please log in again.');
+      return;
+    }
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    browseArticles = data.articles;
+    renderBrowse();
+  } catch (err) {
+    editorBrowseBody.innerHTML =
+      `<p style="padding:20px;color:#ef4444;font-size:0.875rem">Error: ${escHtml(err.message)}</p>`;
+  }
+}
+
+function renderBrowse() {
+  if (!browseArticles.length) {
+    editorBrowseBody.innerHTML =
+      '<p style="padding:20px;color:var(--text-muted);font-size:0.875rem">No articles found.</p>';
+    return;
+  }
+
+  const pinnedUrls = new Set(curationData.pinned.map(p => p.url));
+  const manualUrls = new Set((curationData.manual || []).map(m => m.url));
+
+  editorBrowseBody.innerHTML = '';
+  const frag = document.createDocumentFragment();
+
+  browseArticles.forEach(article => {
+    const isPinned = pinnedUrls.has(article.url);
+    const isManual = manualUrls.has(article.url);
+
+    const row = document.createElement('div');
+    row.className = 'discovery-card';
+    row.innerHTML = `
+      <div class="discovery-card-info">
+        <div class="discovery-card-meta">
+          <span class="discovery-source">${escHtml(article.source)}</span>
+          <span class="discovery-time">${timeAgo(article.publishedAt)}</span>
+          <span class="category-badge">${escHtml(article.category)}</span>
+        </div>
+        <div class="discovery-card-title">${escHtml(article.title)}</div>
+      </div>
+      <div class="discovery-card-actions">
+        ${isPinned
+          ? '<span class="discovery-pinned-badge">✓ Pinned</span>'
+          : isManual
+            ? '<span class="discovery-pinned-badge">✓ In Feed</span>'
+            : '<button class="editor-btn editor-pin-btn discovery-pin-btn">Pin</button>'}
+      </div>`;
+
+    if (!isPinned && !isManual) {
+      row.querySelector('.discovery-pin-btn').addEventListener('click', () => showPinModal(article));
+    }
+
+    frag.appendChild(row);
+  });
+
+  editorBrowseBody.appendChild(frag);
+}
+
+/* ===== Pin modal ===== */
+
+function showPinModal(article) {
+  _pinModalArticle = article;
+  editorPinArticleTitle.textContent = article.title;
+  editorPinNote.value = '';
+  editorPinRegion.value = 'global';
+  editorPinError.style.display = 'none';
+  editorPinOverlay.style.display = 'flex';
+  updateBodyScroll();
+  setTimeout(() => editorPinNote.focus(), 60);
+}
+
+function closePinModal() {
+  editorPinOverlay.style.display = 'none';
+  updateBodyScroll();
+  _pinModalArticle = null;
+}
+
+async function submitPin() {
+  const article = _pinModalArticle;
+  if (!article) return;
+
+  const note   = editorPinNote.value.trim();
+  const region = editorPinRegion.value;
+
+  editorPinSubmit.disabled = true;
+  editorPinSubmit.textContent = 'Pinning…';
+  editorPinError.style.display = 'none';
+
+  try {
+    await curationRequest('POST', '/api/curation/pin', {
+      url:         article.url,
+      title:       article.title,
+      source:      article.source,
+      author:      article.author,
+      description: article.description,
+      image:       article.image,
+      publishedAt: article.publishedAt,
+      readTime:    article.readTime,
+      category:    article.category,
+      note,
+      region,
+    });
+    curationData.pinned.unshift({ ...article, note, region });
+    updateEditorCounts();
+    closePinModal();
+    renderBrowse(); // refresh "✓ Pinned" badge in browse view
+    await fetchNews();
+    showToast('Article pinned to feed');
+  } catch (err) {
+    editorPinError.textContent = err.message;
+    editorPinError.style.display = '';
+  } finally {
+    editorPinSubmit.disabled = false;
+    editorPinSubmit.textContent = 'Pin Article';
+  }
+}
+
+editorPinClose.addEventListener('click', closePinModal);
+editorPinOverlay.addEventListener('click', e => { if (e.target === editorPinOverlay) closePinModal(); });
+editorPinSubmit.addEventListener('click', submitPin);
+editorPinNote.addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
 
 /* ===== Init ===== */
+updateSubtitle();
 fetchNews();

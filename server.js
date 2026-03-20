@@ -38,8 +38,10 @@ async function loadCuration() {
   const { rows } = await pool.query('SELECT hidden, pinned, manual FROM curation WHERE id = 1');
   return {
     hidden: Array.isArray(rows[0]?.hidden) ? rows[0].hidden : [],
-    pinned: Array.isArray(rows[0]?.pinned) ? rows[0].pinned : [],
-    manual: Array.isArray(rows[0]?.manual) ? rows[0].manual : [],
+    pinned: Array.isArray(rows[0]?.pinned)
+      ? rows[0].pinned.map(p => ({ ...p, region: p.region || 'global' })) : [],
+    manual: Array.isArray(rows[0]?.manual)
+      ? rows[0].manual.map(m => ({ ...m, region: m.region || 'global' })) : [],
   };
 }
 
@@ -52,20 +54,11 @@ async function saveCuration(data) {
 
 let curation = { hidden: [], pinned: [], manual: [] }; // populated in start()
 
-// Apply hidden + pinned + manual curation to a raw article list.
-// Hidden articles are removed; pinned articles appear at the front;
-// manual articles are merged into the feed sorted by date.
-// Called at serve-time so curation changes take effect without bypassing cache.
-function applyCuration(articles) {
-  const hiddenSet = new Set(curation.hidden);
-  const pinnedUrls = new Set(curation.pinned.map(p => p.url));
-  const manualUrls = new Set(curation.manual.map(m => m.url));
-  const live = articles.filter(a => !hiddenSet.has(a.url) && !pinnedUrls.has(a.url) && !manualUrls.has(a.url));
+// Build the public feed from curated content only: pinned first, then manual, sorted by date.
+function buildPublicFeed() {
   const pinned = curation.pinned.map((p, i) => ({ ...p, id: `pinned-${i}`, pinned: true }));
   const manual = curation.manual.map((m, i) => ({ ...m, id: `manual-${i}`, manual: true }));
-  // Merge manual articles with live articles, sorted by publishedAt
-  const merged = [...live, ...manual].sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-  return [...pinned, ...merged];
+  return [...pinned, ...manual].sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 }
 
 // Per-param cache: key = `${sortBy}_${days}_${region}`
@@ -246,34 +239,12 @@ app.get('/api/curation/verify', editorAuth, (req, res) => {
 // Public: read current curation state (frontend loads this to show badges/counts)
 app.get('/api/curation', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ hidden: curation.hidden, pinned: curation.pinned, manual: curation.manual });
-});
-
-// Hide an article by URL — removes it from the public feed
-app.post('/api/curation/hide', editorAuth, async (req, res) => {
-  const { url } = req.body;
-  if (!url || !isSafeUrl(url)) return res.status(400).json({ error: 'Invalid URL' });
-  auditLog(req, 'hide', url);
-  if (!curation.hidden.includes(url)) {
-    curation.hidden.push(url);
-    await saveCuration(curation);
-  }
-  res.json({ ok: true });
-});
-
-// Unhide a previously hidden article
-app.delete('/api/curation/hide', editorAuth, async (req, res) => {
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'URL required' });
-  auditLog(req, 'unhide', url);
-  curation.hidden = curation.hidden.filter(u => u !== url);
-  await saveCuration(curation);
-  res.json({ ok: true });
+  res.json({ pinned: curation.pinned, manual: curation.manual });
 });
 
 // Pin an article — stores full article data so it always appears at the top
 app.post('/api/curation/pin', editorAuth, async (req, res) => {
-  const { url, title, source, author, description, image, publishedAt, readTime, category, note } = req.body;
+  const { url, title, source, author, description, image, publishedAt, readTime, category, note, region } = req.body;
   if (!url || !isSafeUrl(url)) return res.status(400).json({ error: 'Invalid URL' });
   auditLog(req, 'pin', url);
   if (!curation.pinned.find(p => p.url === url)) {
@@ -291,6 +262,7 @@ app.post('/api/curation/pin', editorAuth, async (req, res) => {
       category: ['Policy', 'Community', 'Science', 'Environment', 'General'].includes(category)
         ? category : 'General',
       note: String(note || '').slice(0, 500),
+      region: VALID_REGIONS.includes(region) ? region : 'global',
       pinnedAt: new Date().toISOString(),
     });
     await saveCuration(curation);
@@ -310,7 +282,7 @@ app.delete('/api/curation/pin', editorAuth, async (req, res) => {
 
 // Add a manual article — appears in feed sorted by date (not pinned)
 app.post('/api/curation/manual', editorAuth, async (req, res) => {
-  const { url, title, source, author, description, image, publishedAt, readTime, category } = req.body;
+  const { url, title, source, author, description, image, publishedAt, readTime, category, region } = req.body;
   if (!url || !isSafeUrl(url)) return res.status(400).json({ error: 'Invalid URL' });
   if (!curation.manual.find(m => m.url === url)) {
     curation.manual.push({
@@ -324,6 +296,7 @@ app.post('/api/curation/manual', editorAuth, async (req, res) => {
       readTime: Math.min(Math.max(Number(readTime) || 1, 1), 60),
       category: ['Policy', 'Community', 'Science', 'Environment', 'General'].includes(category)
         ? category : 'General',
+      region: VALID_REGIONS.includes(region) ? region : 'global',
       addedAt: new Date().toISOString(),
     });
     await saveCuration(curation);
@@ -340,9 +313,19 @@ app.delete('/api/curation/manual', editorAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── News API ─────────────────────────────────────────────────────────────────
+// ─── Public feed ──────────────────────────────────────────────────────────────
 
-app.get('/api/news', async (req, res) => {
+// Returns the curated feed (pinned + manual). Filtering by date/region/category
+// is done client-side since the full corpus is small.
+app.get('/api/news', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ articles: buildPublicFeed() });
+});
+
+// ─── Editor discovery (NewsAPI browse) ────────────────────────────────────────
+
+// Editor-only: fetch live NewsAPI results for curation discovery.
+app.get('/api/editor/browse', editorAuth, async (req, res) => {
   if (!API_KEY) {
     return res.status(500).json({ error: 'News service is not configured.' });
   }
@@ -361,7 +344,7 @@ app.get('/api/news', async (req, res) => {
 
   if (!force && cached && now - cached.timestamp < CACHE_TTL) {
     res.setHeader('Cache-Control', 'no-store');
-    return res.json({ articles: applyCuration(cached.data), cached: true });
+    return res.json({ articles: cached.data, cached: true });
   }
 
   const controller = new AbortController();
@@ -378,7 +361,6 @@ app.get('/api/news', async (req, res) => {
       `&from=${from}` +
       `&pageSize=100`;
 
-    // Send API key in header instead of query string to keep it out of logs
     const response = await fetch(url, {
       headers: { 'X-Api-Key': API_KEY },
       signal: controller.signal,
@@ -387,7 +369,6 @@ app.get('/api/news', async (req, res) => {
     const data = await response.json();
 
     if (data.status !== 'ok') {
-      // Log full upstream message internally; return a generic error to the client
       console.error('NewsAPI error:', data.message);
       return res.status(502).json({ error: 'Unable to fetch news at this time. Please try again.' });
     }
@@ -396,12 +377,12 @@ app.get('/api/news', async (req, res) => {
       .filter(a => a.title && a.title !== '[Removed]' && a.url)
       .filter(a => !BLOCKED_DOMAINS.some(d => a.url.includes(d)))
       .map(normalizeArticle)
-      .filter(a => a.url) // discard any articles whose URL failed isSafeUrl
+      .filter(a => a.url)
       .map(a => ({ ...a, category: categorize(a) }));
 
     cache.set(cacheKey, { data: articles, timestamp: now });
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ articles: applyCuration(articles), cached: false });
+    res.json({ articles, cached: false });
   } catch (err) {
     clearTimeout(fetchTimeout);
     if (err.name === 'AbortError') {

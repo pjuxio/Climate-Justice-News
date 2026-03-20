@@ -6,15 +6,15 @@
   <title>ClimateJustice.news</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>" />
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>" />
-  <meta name="description" content="Real-time climate justice news aggregator — search top stories by region, category, and date range." />
+  <meta name="description" content="Editorially curated climate justice news — stories selected for depth, relevance, and justice-centred framing." />
   <meta property="og:title" content="ClimateJustice.news" />
-  <meta property="og:description" content="Real-time climate justice news aggregator — search top stories by region, category, and date range." />
+  <meta property="og:description" content="Editorially curated climate justice news — stories selected for depth, relevance, and justice-centred framing." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://climatejustice.news" />
   <meta property="og:image" content="https://climatejustice.news/og-img.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="ClimateJustice.news" />
-  <meta name="twitter:description" content="Real-time climate justice news aggregator — search top stories by region, category, and date range." />
+  <meta name="twitter:description" content="Editorially curated climate justice news — stories selected for depth, relevance, and justice-centred framing." />
   <meta name="twitter:image" content="https://climatejustice.news/og-img.png" />
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-4WG9XES34T"></script>
@@ -42,7 +42,7 @@
         <span class="brand-icon">&#127807;</span>
         <div>
           <h1 class="brand-name">ClimateJustice<span class="brand-tld">.news</span></h1>
-          <p class="brand-sub" id="brand-sub">Top stories · past 7 days</p>
+          <p class="brand-sub" id="brand-sub">All time · Global</p>
         </div>
       </div>
       <div class="header-actions">
@@ -92,25 +92,16 @@
     </div>
   </div>
 
-  <!-- Controls bar: sort + date range + region focus -->
+  <!-- Controls bar: date range + region focus -->
   <div class="controls-bar">
     <div class="controls-inner">
       <div class="control-group">
-        <span class="control-label">Sort</span>
-        <button class="ctrl-btn active" data-sort="popularity">Top</button>
-        <button class="ctrl-btn" data-sort="publishedAt">Latest</button>
-      </div>
-      <div class="control-sep"></div>
-      <div class="control-group">
         <span class="control-label">Range</span>
+        <button class="ctrl-btn active" data-days="0">All</button>
         <button class="ctrl-btn" data-days="1">24h</button>
         <button class="ctrl-btn" data-days="3">3d</button>
-        <button class="ctrl-btn active" data-days="7">7d</button>
+        <button class="ctrl-btn" data-days="7">7d</button>
         <button class="ctrl-btn" data-days="30">30d</button>
-      </div>
-      <div class="control-sep"></div>
-      <div class="control-group">
-        <button id="picks-toggle-btn" class="ctrl-btn" title="Show Highlights">Highlights</button>
       </div>
     </div>
     <div class="controls-inner controls-inner--focus">
@@ -134,6 +125,7 @@
         Editor Mode
       </span>
       <span id="editor-counts" class="editor-counts">Loading…</span>
+      <button id="editor-browse-btn" class="editor-banner-btn">Browse</button>
       <button id="editor-manage-btn" class="editor-banner-btn">Manage</button>
       <button id="editor-exit-btn" class="editor-banner-btn editor-banner-btn--exit">Exit</button>
     </div>
@@ -172,8 +164,6 @@
 
   <!-- Footer -->
   <footer class="footer">
-    <span>Powered by <a href="https://newsapi.org" target="_blank" rel="noopener">NewsAPI</a></span>
-    <span class="footer-sep">·</span>
     <span id="article-count"></span>
     <span class="footer-sep">·</span>
     <span>Press <kbd>R</kbd> to refresh</span>
@@ -199,38 +189,12 @@
 
         <section class="info-section">
           <h3 class="info-heading">What is this?</h3>
-          <p><strong>ClimateJustice.news</strong> aggregates real-time English-language news articles related to climate justice from thousands of global sources, powered by <a href="https://newsapi.org" target="_blank" rel="noopener">NewsAPI</a>. Results are refreshed on demand and cached for 5 minutes to keep things fast.</p>
-        </section>
-
-        <section class="info-section">
-          <h3 class="info-heading">Keyword search approach</h3>
-          <p>Every search uses a base query that covers key terms in the climate justice space:</p>
-          <ul class="info-list">
-            <li><code>"climate justice"</code></li>
-            <li><code>"environmental justice"</code></li>
-            <li><code>"climate equity"</code></li>
-            <li><code>"climate racism"</code></li>
-            <li><code>"just transition"</code></li>
-            <li><code>"climate policy"</code></li>
-            <li><code>"fossil fuels"</code></li>
-            <li><code>"environmental law"</code></li>
-            <li><code>"carbon tax"</code></li>
-            <li><code>"COP30"</code></li>
-            <li><code>"climate summit"</code></li>
-          </ul>
-          <p>These are combined with <strong>OR</strong> so any article matching at least one phrase is included. This casts a wide net while staying focused on justice-framing — not just climate science or policy in general.</p>
-        </section>
-
-        <section class="info-section">
-          <h3 class="info-heading">Regional focus</h3>
-          <p>Selecting a region <strong>narrows</strong> results by ANDing the base query with geographic terms specific to that region. For example, choosing <strong>Africa</strong> appends:</p>
-          <p class="info-code">AND (Africa OR Nigeria OR Kenya OR Ghana OR "South Africa" OR Ethiopia OR "Sub-Saharan" …)</p>
-          <p>This surfaces stories where both the justice framing <em>and</em> the region appear, rather than just filtering by publisher location.</p>
+          <p><strong>ClimateJustice.news</strong> is an editorially curated news feed focused on climate justice. Every article is hand-selected by an editor for its depth, relevance, and justice-centred framing — not just algorithmic aggregation.</p>
         </section>
 
         <section class="info-section">
           <h3 class="info-heading">Categories</h3>
-          <p>Each article is auto-categorised on the server by scanning its headline and description for keyword patterns:</p>
+          <p>Articles are categorised by topic. Use the chips at the top to filter:</p>
           <ul class="info-list">
             <li><strong>Policy</strong> — legislation, government, regulation, COP summits</li>
             <li><strong>Community</strong> — grassroots, activism, Indigenous, protest, movement</li>
@@ -241,8 +205,8 @@
         </section>
 
         <section class="info-section">
-          <h3 class="info-heading">Sort &amp; range</h3>
-          <p><strong>Top</strong> ranks by article popularity across NewsAPI's index. <strong>Latest</strong> ranks by publish date. The date range controls how far back the search window reaches — from the past 24 hours up to 30 days.</p>
+          <h3 class="info-heading">Filters</h3>
+          <p>Use <strong>Range</strong> to show only articles published within a time window, and <strong>Focus</strong> to filter by the region the article was assigned to during curation.</p>
         </section>
 
       </div>
@@ -287,6 +251,84 @@
       </div>
       <div class="modal-body" id="editor-manage-body" style="gap:20px">
         <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Editor browse overlay — discover NewsAPI articles for curation -->
+  <div class="modal-overlay" id="editor-browse-overlay" role="dialog" aria-modal="true" aria-labelledby="editor-browse-title" style="display:none">
+    <div class="modal modal--wide">
+      <div class="modal-header">
+        <h2 class="modal-title" id="editor-browse-title">Browse Articles</h2>
+        <button class="modal-close" id="editor-browse-close" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="browse-controls">
+        <div class="control-group">
+          <span class="control-label">Sort</span>
+          <button class="ctrl-btn active" data-browse-sort="popularity">Top</button>
+          <button class="ctrl-btn" data-browse-sort="publishedAt">Latest</button>
+        </div>
+        <div class="control-sep"></div>
+        <div class="control-group">
+          <span class="control-label">Range</span>
+          <button class="ctrl-btn" data-browse-days="1">24h</button>
+          <button class="ctrl-btn" data-browse-days="3">3d</button>
+          <button class="ctrl-btn active" data-browse-days="7">7d</button>
+          <button class="ctrl-btn" data-browse-days="30">30d</button>
+        </div>
+        <div class="control-sep"></div>
+        <div class="control-group">
+          <span class="control-label">Region</span>
+          <button class="ctrl-btn active" data-browse-region="global">Global</button>
+          <button class="ctrl-btn" data-browse-region="americas">Americas</button>
+          <button class="ctrl-btn" data-browse-region="africa">Africa</button>
+          <button class="ctrl-btn" data-browse-region="asia">Asia Pacific</button>
+          <button class="ctrl-btn" data-browse-region="europe">Europe</button>
+          <button class="ctrl-btn" data-browse-region="mena">MENA</button>
+        </div>
+      </div>
+      <div class="modal-body" id="editor-browse-body" style="gap:0;padding:0;max-height:60vh;overflow-y:auto">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Editor pin modal — note + region when pinning an article -->
+  <div class="modal-overlay" id="editor-pin-overlay" role="dialog" aria-modal="true" style="display:none">
+    <div class="modal editor-login-modal">
+      <div class="modal-header">
+        <h2 class="modal-title">Pin Article</h2>
+        <button class="modal-close" id="editor-pin-close" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" style="gap:14px">
+        <p id="editor-pin-article-title" style="font-size:0.82rem;font-weight:600;color:var(--text-primary);line-height:1.4;margin:0"></p>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="font-size:0.76rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Region</label>
+          <select id="editor-pin-region" class="editor-select">
+            <option value="global">Global</option>
+            <option value="americas">Americas</option>
+            <option value="africa">Africa</option>
+            <option value="asia">Asia Pacific</option>
+            <option value="europe">Europe</option>
+            <option value="mena">MENA</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="font-size:0.76rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Editor note <span style="font-weight:400;text-transform:none">(optional)</span></label>
+          <input type="text" id="editor-pin-note" class="editor-token-input" placeholder="e.g. Essential reading on COP30 negotiations" autocomplete="off" />
+        </div>
+        <p id="editor-pin-error" style="display:none;font-size:0.8rem;color:#ef4444;margin:0"></p>
+        <button id="editor-pin-submit" class="retry-btn" style="align-self:flex-start">Pin Article</button>
       </div>
     </div>
   </div>
