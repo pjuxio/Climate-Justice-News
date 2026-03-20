@@ -82,7 +82,7 @@ setInterval(() => {
   for (const [key, entry] of cache.entries()) {
     if (now - entry.timestamp >= CACHE_TTL) cache.delete(key);
   }
-}, CACHE_TTL);
+}, CACHE_TTL).unref(); // unref so the timer doesn't keep the process alive
 
 // Core climate justice search terms (kept under ~320 chars so regional AND clauses stay within NewsAPI's 500-char query limit)
 const BASE_QUERY =
@@ -427,4 +427,11 @@ async function start() {
   });
 }
 
-start().catch(err => { console.error('Failed to start:', err); process.exit(1); });
+if (process.env.NODE_ENV !== 'test') {
+  start().catch(err => { console.error('Failed to start:', err); process.exit(1); });
+}
+
+/* Exports for testing only — not used in production */
+if (process.env.NODE_ENV === 'test') {
+  module.exports = { app, curation, isSafeUrl, buildQuery, normalizeArticle, categorize, buildPublicFeed, estimateReadTime };
+}
