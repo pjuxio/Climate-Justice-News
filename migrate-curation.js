@@ -9,6 +9,7 @@ const pool = new Pool({
 });
 
 // [title_substring, region, category]
+// Note: some titles use curly apostrophes/quotes — substrings avoid them.
 const ASSIGNMENTS = [
   ['Paul Ehrlich',                                               'global',   'Science'],
   ['California approves rules for landmark corporate climate',   'americas', 'Policy'],
@@ -67,6 +68,16 @@ const ASSIGNMENTS = [
   ['Supreme Court takes up oil companies',                       'americas', 'Policy'],
   ['UN Secretary General: Clean Energy Future Is within Reach',  'global',   'Policy'],
   ['The Important Role That Black Communities Play',             'americas', 'Community'],
+  // Curly-apostrophe titles — matched via apostrophe-free substrings
+  ['pushing EU toward renewables',                               'europe',   'Policy'],
+  ['climate law clashes with Gov. Hochul',                       'americas', 'Policy'],
+  ['acid rain',                                                  'mena',     'Science'],
+  ['War With Iran Is Also a Climate War',                        'mena',     'Policy'],
+  ['Endangerment Finding Repeal Stands',                         'americas', 'Policy'],
+  ['vision for America embraced environmental justice',          'americas', 'Community'],
+  ['Thermal drone footage shows Musk',                           'americas', 'Policy'],
+  ['carbon tax should stay',                                     'africa',   'Policy'],
+  ['Oil Deals Have Climate Activists',                           'global',   'Policy'],
 ];
 
 async function run() {
